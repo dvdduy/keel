@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: keel
+      POSTGRES_PASSWORD: keel
+      POSTGRES_DB: keel
+    ports:
+      - "5432:5432"
+    volumes:
+      - keel_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keel"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+volumes:
+  keel_pgdata:

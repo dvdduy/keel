@@ -6,6 +6,12 @@ build-backend = "setuptools.build_meta"
 name = "keel"
 version = "0.1.0"
 requires-python = ">=3.12"
+dependencies = [
+    "sqlalchemy>=2.0",
+    "pydantic-settings>=2.0",
+    "psycopg[binary]>=3.1",
+    "alembic>=1.13",
+]
 
 [project.optional-dependencies]
 dev = ["ruff", "black", "mypy", "pytest", "import-linter"]
@@ -22,6 +28,8 @@ line-length = 100
 
 [tool.mypy]
 strict = true
+explicit_package_bases = true
+mypy_path = "src"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -35,3 +43,6 @@ type = "layers"
 layers = [
     "keel.entrypoints", "keel.adapters", "keel.application", "keel.domain"
 ]
+
+[tool.setuptools.package-data]
+keel = ["py.typed"]
