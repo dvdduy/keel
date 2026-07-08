@@ -12,10 +12,11 @@ dependencies = [
     "psycopg[binary]>=3.1",
     "alembic>=1.13",
     "duckdb>=1.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
-dev = ["ruff", "black", "mypy", "pytest", "import-linter"]
+dev = ["ruff", "black", "mypy", "pytest", "import-linter", "types-PyYAML",]
 
 [tool.setuptools.packages.find]
 where = ["src"]

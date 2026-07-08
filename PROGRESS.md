@@ -58,3 +58,18 @@
 - **Run born terminal (SUCCESS), never walks RUNNING.** execute() is synchronous/atomic from outside, so the intermediate state is unobservable — persisting it would build machinery for an observer that doesn't exist. Becomes load-bearing Day 9 when a topological runner makes step states independently observable/failable.
 - **Single `now` → zero-duration runs.** Clock read once; created_at == finished_at. Honest while ingest is instant; needs two reads (before/after) once Day 24 SLOs require run duration.
 - `ingest_csv` returns row count, currently discarded — that count is the volume signal for Day 17 quality checks.
+
+## Day 4 — Spec DSL schema + parsing
+- Date: 2026-07-07
+- Done:
+  - Added typed `PipelineSpec` models for YAML pipeline specs: source, destination, contract columns, freshness target, transform ref, and quality checks.
+  - Added YAML parser using `yaml.safe_load` + `PipelineSpec.model_validate`, plus YAML serialization with JSON-mode dumping for clean enum round-trips.
+  - Added fixture-backed happy-path and round-trip tests.
+  - Added negative-path coverage for parser failures, unknown keys, required freshness, freshness bounds, empty contract, duplicate columns, dangling quality-check references, invalid destination format, invalid owner format, and unsupported quality-check types.
+
+### Design decisions
+- Freshness is required on every pipeline spec. Day 4 captures the target; Day 16 decides clock semantics; Day 24 uses it as part of SLO evaluation.
+- Structural validation was pulled forward from Day 5 for now. Day 5 should extend this into product-quality diagnostics rather than duplicate the same checks.
+
+### Talking point banked
+"The pipeline is data, not code — declarative YAML specs are reviewable, diffable, parsed through a typed Pydantic boundary, and protected by negative-path tests for the failure modes users actually hit."

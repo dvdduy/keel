@@ -1,0 +1,17 @@
+name: orders_raw
+team: growth
+owner: duy@keel.dev
+source:
+  type: csv
+  path: seeds/orders.csv
+destination: raw.orders
+contract:
+  - {name: order_id, type: integer, nullable: false}
+  - {name: amount, type: decimal}
+  - {name: created_at, type: timestamp}
+transform: stg_orders
+freshness:
+  max_age_minutes: 60
+quality_checks:
+  - {type: not_null, column: order_id}
+  - {type: unique, column: order_id}
