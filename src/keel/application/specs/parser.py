@@ -4,11 +4,17 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import ValidationError
 
+from keel.application.specs.diagnostics import (
+    SpecError,
+    SpecValidationError,
+    diagnostics_from_validation_error,
+)
 from keel.application.specs.models import PipelineSpec
 
 
-class SpecParseError(ValueError):
+class SpecParseError(SpecError):
     """Raised when a pipeline spec cannot be parsed as YAML."""
 
 
@@ -23,7 +29,10 @@ def parse_pipeline_spec_yaml(content: str) -> PipelineSpec:
     if not isinstance(raw_spec, dict):
         raise SpecParseError("pipeline spec YAML must be a mapping/object")
 
-    return PipelineSpec.model_validate(raw_spec)
+    try:
+        return PipelineSpec.model_validate(raw_spec)
+    except ValidationError as err:
+        raise SpecValidationError(diagnostics_from_validation_error(err)) from err
 
 
 def parse_pipeline_spec_file(path: str | Path) -> PipelineSpec:

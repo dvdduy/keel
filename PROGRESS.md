@@ -73,3 +73,26 @@
 
 ### Talking point banked
 "The pipeline is data, not code — declarative YAML specs are reviewable, diffable, parsed through a typed Pydantic boundary, and protected by negative-path tests for the failure modes users actually hit."
+
+## Day 5 — Spec diagnostics as product UX
+
+* Date: 2026-07-07
+* Done: Added Keel-owned `SpecError`, `SpecValidationError`, and structured `Diagnostic`s. Parser now catches Pydantic `ValidationError` and re-raises Keel-owned diagnostics, so raw Pydantic errors no longer cross the spec boundary.
+* Done: Implemented stable diagnostic paths like `(root)`, `freshness.max_age_minutes`, and `contract[1].name`; sorted diagnostics for deterministic output.
+* Done: Chose hybrid message ownership: preserve custom validator messages, map common structural Pydantic errors, and keep fallback messages clean.
+* Tests: `pytest tests/test_spec.py` green — 23 passed.
+
+### Design notes
+
+* Accepted a small Option-C UX trade-off: custom validator messages may include the field name (`owner: owner must be an email-like value`), while mapped structural messages are field-relative (`freshness.max_age_minutes: must be greater than 0`). Future polish could normalize all messages to field-relative predicates.
+* Clean-message tests include regression insurance against accidentally using `str(ValidationError)`, which would leak Pydantic URLs/type noise.
+
+### Scope guards
+
+* Deferred YAML line/column diagnostics; `yaml.safe_load` discards source positions.
+* Deferred “Did you mean …?” suggestions for unknown keys.
+* Did not change `models.py` validators; Day 5 only wraps and translates their output.
+
+### Talking point banked
+
+"Good platform errors are a feature — Keel rejects bad specs before side effects, reports all field-level problems in one pass, and exposes a stable Keel error contract instead of leaking Pydantic internals."

@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 import yaml
-from pydantic import ValidationError
 
+from keel.application.specs.diagnostics import Diagnostic, SpecValidationError
 from keel.application.specs.models import QualityCheckType
 from keel.application.specs.parser import (
     SpecParseError,
@@ -31,6 +31,13 @@ def parse_spec_dict(spec: dict[str, Any]):
     yaml_content = yaml.safe_dump(spec, sort_keys=False)
 
     return parse_pipeline_spec_yaml(yaml_content)
+
+
+def collect_diagnostics(spec: dict[str, Any]) -> tuple[Diagnostic, ...]:
+    with pytest.raises(SpecValidationError) as exc_info:
+        parse_spec_dict(spec)
+
+    return exc_info.value.diagnostics
 
 
 def test_parse_pipeline_spec_file() -> None:
@@ -82,26 +89,84 @@ def test_parse_pipeline_spec_yaml_rejects_non_mapping_yaml() -> None:
 - orders_raw
 - growth
 """
-
     with pytest.raises(SpecParseError, match="mapping/object"):
         parse_pipeline_spec_yaml(yaml_content)
+
+
+def test_parser_raises_spec_validation_error_not_pydantic() -> None:
+    spec = load_valid_spec_dict()
+    spec["owner"] = "duy"
+
+    with pytest.raises(SpecValidationError) as exc_info:
+        parse_spec_dict(spec)
+
+    assert exc_info.type is SpecValidationError
+
+
+def test_diagnostics_report_all_problems_at_once() -> None:
+    spec = load_valid_spec_dict()
+    spec["owner"] = "duy"
+    spec["freshness"]["max_age_minutes"] = 0
+    spec["typo_quality_checks"] = []
+
+    diagnostics = collect_diagnostics(spec)
+
+    assert len(diagnostics) == 3
+    assert {diagnostic.loc for diagnostic in diagnostics} == {
+        "freshness.max_age_minutes",
+        "owner",
+        "typo_quality_checks",
+    }
+
+
+def test_diagnostic_loc_renders_nested_path() -> None:
+    spec = load_valid_spec_dict()
+    spec["contract"][1]["name"] = "not a valid identifier"
+
+    diagnostics = collect_diagnostics(spec)
+
+    assert any(
+        diagnostic.loc == "contract[1].name"
+        and "contract column name must be a valid identifier" in diagnostic.message
+        for diagnostic in diagnostics
+    )
+
+
+def test_diagnostic_messages_are_clean() -> None:
+    spec = load_valid_spec_dict()
+    spec["owner"] = "duy"
+    spec["freshness"]["max_age_minutes"] = 0
+    spec["typo_quality_checks"] = []
+
+    with pytest.raises(SpecValidationError) as exc_info:
+        parse_spec_dict(spec)
+
+    report = str(exc_info.value)
+
+    assert "https://errors.pydantic.dev" not in report
+    assert "[type=" not in report
+    assert "Value error," not in report
 
 
 def test_pipeline_spec_rejects_unknown_top_level_key() -> None:
     spec = load_valid_spec_dict()
     spec["typo_quality_checks"] = []
 
-    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
-        parse_spec_dict(spec)
+    diagnostics = collect_diagnostics(spec)
+
+    assert diagnostics == (Diagnostic("typo_quality_checks", "is not a supported field"),)
 
 
 @pytest.mark.parametrize("max_age_minutes", [0, -1])
-def test_pipeline_spec_rejects_non_positive_freshness(max_age_minutes: int) -> None:
+def test_pipeline_spec_rejects_non_positive_freshness(
+    max_age_minutes: int,
+) -> None:
     spec = load_valid_spec_dict()
     spec["freshness"]["max_age_minutes"] = max_age_minutes
 
-    with pytest.raises(ValidationError, match="greater than 0"):
-        parse_spec_dict(spec)
+    diagnostics = collect_diagnostics(spec)
+
+    assert diagnostics == (Diagnostic("freshness.max_age_minutes", "must be greater than 0"),)
 
 
 def test_pipeline_spec_rejects_duplicate_contract_columns() -> None:
@@ -111,8 +176,9 @@ def test_pipeline_spec_rejects_duplicate_contract_columns() -> None:
         {"name": "order_id", "type": "decimal"},
     ]
 
-    with pytest.raises(ValidationError, match="contract column names must be unique"):
-        parse_spec_dict(spec)
+    diagnostics = collect_diagnostics(spec)
+
+    assert diagnostics == (Diagnostic("(root)", "contract column names must be unique"),)
 
 
 def test_pipeline_spec_rejects_quality_check_for_unknown_column() -> None:
@@ -121,11 +187,14 @@ def test_pipeline_spec_rejects_quality_check_for_unknown_column() -> None:
         {"type": "not_null", "column": "missing_column"},
     ]
 
-    with pytest.raises(
-        ValidationError,
-        match="quality check references unknown column: missing_column",
-    ):
-        parse_spec_dict(spec)
+    diagnostics = collect_diagnostics(spec)
+
+    assert diagnostics == (
+        Diagnostic(
+            "(root)",
+            "quality check references unknown column: missing_column",
+        ),
+    )
 
 
 @pytest.mark.parametrize(
@@ -142,8 +211,14 @@ def test_pipeline_spec_rejects_invalid_destination(destination: str) -> None:
     spec = load_valid_spec_dict()
     spec["destination"] = destination
 
-    with pytest.raises(ValidationError, match="schema.table"):
-        parse_spec_dict(spec)
+    diagnostics = collect_diagnostics(spec)
+
+    assert diagnostics == (
+        Diagnostic(
+            "destination",
+            "destination must use schema.table format, for example: raw.orders",
+        ),
+    )
 
 
 @pytest.mark.parametrize(
@@ -158,8 +233,9 @@ def test_pipeline_spec_rejects_invalid_owner(owner: str) -> None:
     spec = load_valid_spec_dict()
     spec["owner"] = owner
 
-    with pytest.raises(ValidationError, match="owner must be an email-like value"):
-        parse_spec_dict(spec)
+    diagnostics = collect_diagnostics(spec)
+
+    assert diagnostics == (Diagnostic("owner", "owner must be an email-like value"),)
 
 
 def test_pipeline_spec_rejects_unknown_quality_check_type() -> None:
@@ -168,5 +244,26 @@ def test_pipeline_spec_rejects_unknown_quality_check_type() -> None:
         {"type": "made_up_check", "column": "order_id"},
     ]
 
-    with pytest.raises(ValidationError, match="made_up_check"):
+    diagnostics = collect_diagnostics(spec)
+
+    assert diagnostics == (
+        Diagnostic(
+            "quality_checks[0].type",
+            "has unsupported value 'made_up_check'",
+        ),
+    )
+
+
+def test_unmapped_pydantic_messages_still_render_cleanly() -> None:
+    spec = load_valid_spec_dict()
+    spec["source"] = "csv"
+
+    with pytest.raises(SpecValidationError) as exc_info:
         parse_spec_dict(spec)
+
+    report = str(exc_info.value)
+
+    assert "source:" in report
+    assert "https://errors.pydantic.dev" not in report
+    assert "[type=" not in report
+    assert "Value error," not in report
