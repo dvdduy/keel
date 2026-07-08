@@ -59,6 +59,9 @@ class DuckDbWarehouse:
         if normalized in {"INTEGER", "BIGINT"}:
             return ColumnType.INTEGER
 
+        if normalized.startswith("DECIMAL"):
+            return ColumnType.DECIMAL
+
         if normalized in {"DOUBLE", "FLOAT", "REAL"}:
             return ColumnType.DECIMAL
 

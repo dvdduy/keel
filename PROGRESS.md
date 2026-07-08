@@ -227,6 +227,7 @@
 - Unexpected columns are treated as drift because they are undeclared consumer surface outside the governed contract.
 - Nullability drift is deferred because DuckDB CTAS nullability inference is not reliable enough for an honest detector.
 - Unknown physical warehouse types fail loudly with a Keel-owned `WarehouseError` instead of silently becoming an "unknown" type.
+- Type projection is currently lossy around the exact-vs-approximate numeric boundary: DuckDB `DOUBLE` / `FLOAT` / `REAL` are projected to Keel `DECIMAL` because `ColumnType` has no floating-point logical type yet. That means a table storing money as floating point can appear in sync with a contract that promised decimal precision; future financial-grade enforcement should split exact decimal from approximate float.
 
 ### Talking point banked
 "I separated compatibility from drift: compatibility compares desired spec to desired spec before a change lands; drift compares declared contract to observed warehouse state after the world changes, and detection is read-only."

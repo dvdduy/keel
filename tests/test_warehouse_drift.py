@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import duckdb
+
 from keel.adapters.warehouse.duckdb_warehouse import DuckDbWarehouse
 from keel.application.reconcile.drift import DriftKind, detect_drift
 from keel.application.specs.models import ColumnType
@@ -45,3 +47,29 @@ def test_describe_table_returns_none_for_missing_duckdb_table(
     warehouse = DuckDbWarehouse(str(tmp_path / "warehouse.duckdb"))
 
     assert warehouse.describe_table("raw.missing_orders") is None
+
+
+def test_describe_table_translates_decimal_precision_scale(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "warehouse.duckdb"
+
+    con = duckdb.connect(database=str(database))
+    try:
+        con.execute("CREATE SCHEMA raw")
+        con.execute("""
+            CREATE TABLE raw.decimal_orders (
+                amount DECIMAL(18,3)
+            )
+            """)
+    finally:
+        con.close()
+
+    warehouse = DuckDbWarehouse(str(database))
+
+    observed = warehouse.describe_table("raw.decimal_orders")
+
+    assert observed is not None
+    assert [(column.name, column.type) for column in observed.columns] == [
+        ("amount", ColumnType.DECIMAL),
+    ]
