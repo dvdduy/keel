@@ -115,3 +115,17 @@
 
 ### Talking point banked
 "Every spec change is an immutable, auditable version — I hash the canonical validated meaning of the spec, not YAML bytes, and use a surrogate version id so reverts preserve history instead of overwriting it."
+
+## Day 7 — Contract compatibility engine
+
+### Done
+- Added pure compatibility engine for pipeline contract evolution.
+- Compatibility is checked by column name, so column reorder is safe.
+- Implemented the allowed widening lattice: integer → decimal only.
+- Compatible changes covered: identical contract, add nullable column, widen integer to decimal, relax not-null to nullable, reorder columns.
+- Breaking changes covered: dropped column, rename-as-drop, narrowing decimal to integer, unrelated type change, nullable → not-null, required column added.
+- Engine reports all breaking changes instead of failing on the first one.
+
+### Current status
+- CP1 complete and green.
+- CP2 next: wire compatibility into `SubmitSpec.submit`, reject breaking updates by default, and add audited `allow_breaking` override.
