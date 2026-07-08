@@ -12,5 +12,7 @@ def test_missing_database_url_fails_fast(monkeypatch):
 
 def test_loads_from_env(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@localhost:5432/db")
+    monkeypatch.setenv("WAREHOUSE_PATH", "warehouse.duckdb")  # add this
     settings = Settings(_env_file=None)
     assert settings.database_url == "postgresql+psycopg://u:p@localhost:5432/db"
+    # optionally: assert settings.warehouse_path == "warehouse.duckdb"

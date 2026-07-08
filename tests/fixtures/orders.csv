@@ -1,0 +1,4 @@
+order_id,customer_id,amount
+1,42,19.99
+2,42,5.00
+3,7,120.50

@@ -31,3 +31,30 @@
 - Test isolation via connection-level transaction + rollback fixture. Handles a single `session.commit()` correctly (nested-transaction semantics). Deferred: SAVEPOINT-based fixture for multi-commit tests — build only if a test needs real commits.
 - mypy: `make type` runs `mypy src` (migrations/ and tests/ not type-checked, by design). Confirm it reports a real source-file count, not "0 source files."
 - WSL still on old Python (3.6) — pytest runs on Windows against localhost:5432 to sidestep. Revisit if consolidating onto WSL.
+
+## Day 3 — Warehouse adapter + hello pipeline (walking skeleton walks)
+- Date: 2026-07-07
+- Done:
+  - `WarehouseAdapter` port (application/ports) — interface defined by what the core needs (ingest_csv, row_count), zero DuckDB types in the signature. DuckDB never named at the port.
+  - `DuckDbWarehouse` impl (adapters/warehouse) — `import duckdb` confined here; CREATE SCHEMA IF NOT EXISTS + CREATE OR REPLACE TABLE ... read_csv_auto; row_count via count(*).
+  - `RunPipeline` use-case (application/use_cases) — first real orchestration: ingest CSV → build Run + one "ingest" step → persist via RunRepository. Ports injected (DI); no concrete adapter imported.
+  - `warehouse_path` added to Settings (required, not defaulted — consistent with database_url, nothing guessed). WAREHOUSE_PATH in .env.example.
+  - Tests: adapter ingest→count (temp-file DuckDB, tmp_path); end-to-end asserts BOTH stores — run row SUCCESS in Postgres AND raw.orders rows in DuckDB. Seed logic promoted to conftest `seeded_pipeline` fixture (removed cross-module import of `_seed_pipeline`).
+  - make check green: ruff, black, mypy(strict, 17 files), 11 tests, lint-imports.
+
+### Design decisions
+- **`raw.` naming policy lives in the core, not the adapter.** Adapter receives a fully-qualified `destination` and only ensures whatever schema it's told about exists (`_schema_of`). The convention that the raw layer is called `raw` belongs to the use-case, which passes "raw.orders". Adapter = dumb mechanism, naming = platform policy.
+- **Connection held for the adapter's lifetime.** `__init__` opens one DuckDB connection, methods reuse it — natural for an in-process single-writer engine. Trade-off: stateful, so not trivially thread-shareable; flag when concurrency arrives.
+- **warehouse_path required, not defaulted** — could have defaulted to a local file (unlike database_url, which can't be guessed), chose required for a consistent "everything explicit" config story.
+
+### Seam verified (deliberate-violation experiment, like Day 1)
+- Added `import duckdb` to application/use_cases/run_pipeline.py, ran `lint-imports`, watched it reject with the named `Layered architecture` contract violation, reverted to green. The DuckDB confinement is machine-enforced, not conventional — and the contract policies third-party imports by layer, not just keel.* internal ones.
+
+### Talking point banked
+- "DuckDB now, Snowflake later is a one-adapter swap — the warehouse lives behind a port defined by what the core needs (ingest a CSV, count rows), not what the tool does, so no warehouse SQL leaks into the application. import-linter enforces the seam in CI, and I proved it catches violations rather than just assuming it."
+
+### Notes / open seams for future sessions
+- **Dual-write, left open deliberately.** execute() ingests to DuckDB, THEN writes the run to Postgres, with no transaction spanning the two stores. If `runs.add` throws after a successful ingest: the raw table exists in DuckDB but no run row records it in Postgres — a materialized table with no control-plane trace. Ordering (ingest-before-record) makes the seam visible rather than hidden. Not solved today: idempotency Day 10, failure paths Day 12.
+- **Run born terminal (SUCCESS), never walks RUNNING.** execute() is synchronous/atomic from outside, so the intermediate state is unobservable — persisting it would build machinery for an observer that doesn't exist. Becomes load-bearing Day 9 when a topological runner makes step states independently observable/failable.
+- **Single `now` → zero-duration runs.** Clock read once; created_at == finished_at. Honest while ingest is instant; needs two reads (before/after) once Day 24 SLOs require run duration.
+- `ingest_csv` returns row count, currently discarded — that count is the volume signal for Day 17 quality checks.

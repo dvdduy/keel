@@ -4,3 +4,4 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     database_url: str  # required, missing env var fails at startup
+    warehouse_path: str  # DuckDB file path for the warehouse adapter
