@@ -210,3 +210,23 @@
 
 ### Talking point banked
 "Re-runs are idempotent at the logical batch level: `RunKey(pipeline_id, watermark)` separates 'what work is this?' from 'which attempt is this?', so a successful batch cannot be executed twice while failed attempts remain safely retryable."
+
+## Day 11 — Drift detection
+- Date: 2026-07-08
+- Done:
+  - Added pure drift detection that compares declared `PipelineSpec.contract` against observed warehouse schema.
+  - Added `ObservedSchema`, `ObservedColumn`, `SchemaDrift`, and `DriftReport` as Keel-owned application types.
+  - Reports missing table, missing columns, unexpected columns, and type mismatches.
+  - Missing table is grouped as one root-cause drift and stops immediately instead of emitting one missing-column drift per contract column.
+  - Extended the warehouse port with `describe_table`.
+  - Implemented DuckDB schema observation behind the adapter seam, translating DuckDB physical types into Keel `ColumnType`.
+  - DuckDB `CatalogException` is caught at the adapter boundary and returned as `None`; DuckDB exceptions do not cross into application logic.
+
+### Design decisions
+- Drift is desired-vs-actual, not desired-vs-desired. Compatibility blocks unsafe proposed specs before they land; drift observes the real warehouse after the world changes.
+- Unexpected columns are treated as drift because they are undeclared consumer surface outside the governed contract.
+- Nullability drift is deferred because DuckDB CTAS nullability inference is not reliable enough for an honest detector.
+- Unknown physical warehouse types fail loudly with a Keel-owned `WarehouseError` instead of silently becoming an "unknown" type.
+
+### Talking point banked
+"I separated compatibility from drift: compatibility compares desired spec to desired spec before a change lands; drift compares declared contract to observed warehouse state after the world changes, and detection is read-only."
