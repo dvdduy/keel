@@ -12,8 +12,8 @@ class DuckDbWarehouse:
     (a file, or ':memory:').
     """
 
-    def __init__(self, databasse: str) -> None:
-        self._con = duckdb.connect(database=databasse)
+    def __init__(self, database: str) -> None:
+        self._con = duckdb.connect(database=database)
 
     def ingest_csv(self, destination: str, source: Path) -> int:
         schema = self._schema_of(destination)
