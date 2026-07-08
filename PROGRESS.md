@@ -96,3 +96,22 @@
 ### Talking point banked
 
 "Good platform errors are a feature — Keel rejects bad specs before side effects, reports all field-level problems in one pass, and exposes a stable Keel error contract instead of leaking Pydantic internals."
+
+## Day 6 — Immutable spec versioning
+- Date: 2026-07-07
+- Done:
+  - Added canonical spec serialization for identity: validated `PipelineSpec` → `model_dump(mode="json")` with all resolved defaults → deterministic JSON → SHA-256.
+  - Added `SpecVersion` with surrogate `version_id`, recurring `spec_id` content hash, parent link, canonical content preimage, and timestamp.
+  - Added `SubmitSpec` use case with observable idempotency: identical resubmit returns the existing head with `created=False`; changed specs append a child.
+  - Added pure versioning tests covering deterministic hash, default normalization, key-order normalization, contract order sensitivity, root creation, no-op submit, child append, and revert append.
+  - Added `spec_versions` persistence with DB-owned monotonic `seq` for unambiguous per-pipeline head ordering.
+  - Added SQLAlchemy repository/translators and integration coverage for identical submit dedup and changed submit parent linkage.
+
+### Design decisions
+- Hash meaning, not YAML bytes: comments, whitespace, key order, and explicit defaults should not create new versions.
+- Preserve list order in canonicalization: contract order is part of the declared dataset contract, so swapping columns is a meaningful change.
+- Use surrogate `version_id` plus indexed non-unique `spec_id`: reverts can legitimately reuse the same content hash while creating a new audit event.
+- Use DB identity `seq` for head ordering instead of `created_at desc`: audit head selection must be total and unambiguous.
+
+### Talking point banked
+"Every spec change is an immutable, auditable version — I hash the canonical validated meaning of the spec, not YAML bytes, and use a surrogate version id so reverts preserve history instead of overwriting it."
