@@ -231,3 +231,28 @@
 
 ### Talking point banked
 "I separated compatibility from drift: compatibility compares desired spec to desired spec before a change lands; drift compares declared contract to observed warehouse state after the world changes, and detection is read-only."
+
+## Day 12 — Compensating rollback for atomic rollout
+- Date: 2026-07-08
+- Done:
+  - Evolved `StepHandler` so each successful step returns an opaque compensation callable.
+  - Updated `LocalExecutor` to keep a LIFO compensation stack and run rollback on step failure.
+  - Rollback is best-effort and exhaustive: compensation failures are swallowed so earlier successful steps still get their undo attempted.
+  - Preserved audit semantics: a step that executed successfully remains `SUCCESS`; rollback is treated as a separate side-effect cleanup, not a new run-step state.
+  - Added fake-only executor tests for happy path, reverse-order rollback, first-step failure, compensation failure, and single failed-run persistence.
+  - Added DuckDB-backed compensation for ingest by dropping the materialized table on rollback.
+  - Proved with integration coverage that a successful ingest followed by a failed downstream step does not leave `raw.orders` behind.
+  
+
+### Design decisions
+- Atomicity is semantic, not ACID: Keel crosses resources that cannot share one transaction, so the executor uses Saga-style compensating actions.
+- The executor does not know how to undo a step. Handlers own side-effect knowledge and return opaque compensations.
+- Compensation failures do not abort rollback; rollback reports best effort by exhausting the undo stack.
+- No `ROLLED_BACK` status yet. Run-step history records what executed; rollback visibility is deferred until the run-step lifecycle is revisited.
+
+### Known limitations / future hardening
+- Current DuckDB ingest compensation is correct for first-time table creation but incomplete for replacement semantics. `ingest_csv` uses replace behavior, so `undo(create) = drop`, but `undo(replace) = restore previous version`. Snapshot/restore is deferred; today’s compensation prevents first-time half-materialization but does not yet preserve a previously-good table on failed re-runs.
+- Compensation failures are logged, not persisted as first-class rollback events yet. Day 24/25/35 can promote these logs into SLO/incident/observability surfaces.
+
+### Talking point banked
+"Reconciliation is atomic in the practical distributed-systems sense: when a rollout fails after mutating external systems, the executor unwinds successful steps with Saga-style compensating actions in reverse order. I also understand the limitation: undo depends on prior state — undo(create) is drop, but undo(replace) requires restore."

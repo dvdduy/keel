@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -10,6 +11,8 @@ from keel.application.execution.topology import topological_order
 from keel.application.ports.run_repo import RunRepository
 from keel.application.ports.step_handler import Compensation, StepHandler
 from keel.domain.run import Run, RunStep
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -22,7 +25,7 @@ class LocalExecutor:
         self, pipeline_id: UUID, plan: ExecutionPlan, *, watermark: str | None = None
     ) -> Run:
         ordered_steps = topological_order(plan)
-        compensations: list[Compensation] = []
+        compensations: list[tuple[str, Compensation]] = []
 
         run = Run(
             id=uuid4(),
@@ -53,20 +56,21 @@ class LocalExecutor:
                 return run
 
             run_step.succeed()
-            compensations.append(compensation)
+            compensations.append((plan_step.key, compensation))
 
         run.succeed(self.clock())
         self.runs.add(run)
         return run
 
     @staticmethod
-    def _rollback(compensations: list[Compensation]) -> None:
-        for compensate in reversed(compensations):
+    def _rollback(compensations: list[tuple[str, Compensation]]) -> None:
+        for step_key, compensate in reversed(compensations):
             try:
                 compensate()
             except Exception:
-                """
-                The pass is intentional here: rollback is best-effort and exhaustive.
-                A failed undo must not prevent earlier steps from being undone.
-                """
-                pass
+                logger.exception(
+                    "Compensation failed while rolling back step %r",
+                    step_key,
+                )
+                # Rollback is best-effort and exhaustive: one failed compensation
+                # must not prevent earlier successful steps from being undone.

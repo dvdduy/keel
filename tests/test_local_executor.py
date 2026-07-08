@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -205,3 +206,20 @@ def test_run_still_persisted_once_after_rollback() -> None:
 
     assert run.status == RunStatus.FAILED
     assert runs.added == [run]
+
+
+def test_compensation_failure_is_logged_and_does_not_abort_rollback(caplog) -> None:
+    caplog.set_level(logging.ERROR, logger="keel.adapters.executor.local")
+
+    runs = FakeRunRepository()
+    handler = RecordingStepHandler(
+        fail_on="quality:not_null:order_id",
+        fail_undo_on={"transform"},
+    )
+    executor = LocalExecutor(runs=runs, handler=handler, clock=FakeClock())
+
+    run = executor.execute(uuid4(), _plan())
+
+    assert run.status == RunStatus.FAILED
+    assert handler.undo_calls == ["transform", "ingest"]
+    assert "Compensation failed while rolling back step 'transform'" in caplog.text
