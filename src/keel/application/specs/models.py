@@ -142,4 +142,17 @@ class PipelineSpec(StrictModel):
             if check.column not in unique_column_names:
                 raise ValueError(f"quality check references unknown column: {check.column}")
 
+        seen_quality_checks: set[tuple[QualityCheckType, str]] = set()
+
+        for index, check in enumerate(self.quality_checks):
+            identity = (check.type, check.column)
+
+            if identity in seen_quality_checks:
+                raise ValueError(
+                    f"quality_checks[{index}]: duplicate check "
+                    f"{check.type.value} on {check.column}"
+                )
+
+            seen_quality_checks.add(identity)
+
         return self

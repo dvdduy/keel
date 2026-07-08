@@ -7,7 +7,15 @@ import pytest
 import yaml
 
 from keel.application.specs.diagnostics import Diagnostic, SpecValidationError
-from keel.application.specs.models import QualityCheckType
+from keel.application.specs.models import (
+    ContractColumn,
+    FreshnessSpec,
+    PipelineSpec,
+    QualityCheckSpec,
+    QualityCheckType,
+    SourceSpec,
+    SourceType,
+)
 from keel.application.specs.parser import (
     SpecParseError,
     parse_pipeline_spec_file,
@@ -267,3 +275,25 @@ def test_unmapped_pydantic_messages_still_render_cleanly() -> None:
     assert "https://errors.pydantic.dev" not in report
     assert "[type=" not in report
     assert "Value error," not in report
+
+
+def test_duplicate_quality_checks_are_rejected() -> None:
+    with pytest.raises(ValueError, match="duplicate check not_null on order_id"):
+        PipelineSpec(
+            name="orders",
+            team="analytics",
+            owner="data-platform@example.com",
+            source=SourceSpec(
+                type=SourceType.CSV,
+                path="data/orders.csv",
+            ),
+            destination="raw.orders",
+            contract=[
+                ContractColumn(name="order_id", type="string", nullable=False),
+            ],
+            freshness=FreshnessSpec(max_age_minutes=60),
+            quality_checks=[
+                QualityCheckSpec(type=QualityCheckType.NOT_NULL, column="order_id"),
+                QualityCheckSpec(type=QualityCheckType.NOT_NULL, column="order_id"),
+            ],
+        )
