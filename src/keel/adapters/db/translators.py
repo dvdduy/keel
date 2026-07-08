@@ -21,6 +21,7 @@ def run_to_record(run: Run) -> RunRecord:
             )
             for s in run.steps
         ],
+        watermark=run.watermark,
     )
 
 
@@ -43,4 +44,5 @@ def record_to_run(record: RunRecord) -> Run:
             )
             for s in record.steps
         ],
+        watermark=record.watermark,
     )

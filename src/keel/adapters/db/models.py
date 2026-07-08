@@ -31,6 +31,9 @@ class RunRecord(Base):
     steps: Mapped[list["RunStepRecord"]] = relationship(
         order_by="RunStepRecord.sequence", cascade="all, delete-orphan"
     )
+    watermark: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (Index("ix_runs_pipeline_id_watermark", "pipeline_id", "watermark"),)
 
 
 class RunStepRecord(Base):
