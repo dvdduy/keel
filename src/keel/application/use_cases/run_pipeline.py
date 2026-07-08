@@ -20,9 +20,9 @@ class RunPipeline:
 
         run = Run(
             id=uuid4(),
-            created_at=now,
             pipeline_id=pipeline_id,
             status=RunStatus.RUNNING,
+            created_at=now,
             started_at=now,
             finished_at=now,
         )
@@ -30,10 +30,10 @@ class RunPipeline:
         step = RunStep(
             id=uuid4(),
             run_id=run.id,
-            created_at=now,
             name="ingest",
             status=RunStatus.SUCCESS,
             sequence=1,
+            created_at=now,
         )
         run.status = RunStatus.SUCCESS
         run.steps = [step]

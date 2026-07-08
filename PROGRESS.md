@@ -152,3 +152,48 @@
 ### Talking point banked
 
 "Keel lets producers evolve schemas without shattering consumers. Instead of a hand-maintained table of breaking-change rules, I reduced the taxonomy to one invariant — the new contract must accept every dataset the old one accepted — plus a consumer-surface rule that columns cannot be silently dropped. Breaking changes are rejected by default with a structured diff, and the override is explicit and audited, so 'move fast' is a deliberate, recorded decision, not an accident."
+
+## Day 8 — Executable plan + executor port
+- Date: 2026-07-08
+- Done:
+  - Added immutable execution-plan model as a DAG of typed ingest / transform / quality-check steps.
+  - Added deterministic `compile_plan(spec)` that turns a `PipelineSpec` into desired executable state without runtime ids, timestamps, DB access, or executor side effects.
+  - Added `ExecutionPlan` invariants for duplicate step keys and dangling dependencies using a Keel-owned plan error.
+  - Added `PipelineExecutor` port only; no local executor implementation yet.
+  - Left `RunPipeline` untouched intentionally — Day 9 will rewire the ad-hoc path to compile then execute.
+
+### Design decisions
+- `ExecutionPlan` lives in the application layer because it depends on `PipelineSpec` from `application.specs`; putting it in domain would violate the dependency direction.
+- Duplicate quality checks are rejected loudly through the plan invariant instead of silently deduplicated. Silent dedup would hide user intent and make execution/run-step audit ambiguous.
+
+### Talking point banked
+"I model the platform as a reconciler — declarative desired state is compiled into a deterministic execution DAG, while runs remain observed actual state."
+
+## Day 9 — Local topological runner + guarded run lifecycle
+
+* Date: 2026-07-08
+* Done:
+
+  * Added deterministic topological ordering for execution plans using Kahn's algorithm.
+  * Ready-step ties are broken by step key ascending for reproducible run histories.
+  * Cycle detection raises `PlanValidationError` with the stuck step keys.
+  * Added domain-owned guarded transitions for `Run` and `RunStep`.
+  * Illegal lifecycle transitions raise `IllegalStateTransition`; terminal states remain terminal.
+  * Added `StepHandler` port so step work is separate from execution ordering.
+  * Added `LocalExecutor` adapter that runs steps in topo order, fails fast, and persists the terminal run once.
+
+### Design decisions
+
+* Cycle detection lives in `topological_order`, not `ExecutionPlan.__post_init__`, because the topo traversal already discovers cycles. `ExecutionPlan` keeps cheap structural validation; ordering pays for the graph walk once.
+* Local execution lives under `adapters/` because it is one executor backend beside future Airflow, not privileged application logic.
+* Step work lives behind `StepHandler`; the executor only knows whether a step succeeded or raised.
+
+### Deferred seams
+
+* Per-step timestamps are deferred. Adding `started_at` / `finished_at` to `RunStep` needs domain fields, persistence mapping, and an Alembic migration. Day 24 SLOs will force this.
+* Single terminal persistence write is deliberate for now. A crash mid-run leaves no trace; Day 10 idempotency and Day 12 failure-path hardening will address it.
+* Fail-fast is not rollback. Downstream steps halt, but already completed work is not undone. Rollback belongs to Day 12.
+
+### Talking point banked
+
+"Airflow is a pluggable backend — ordering is pure application logic, lifecycle rules live in the domain, step execution is a handler port, and the local runner is just one adapter behind the executor seam."
