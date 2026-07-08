@@ -1,8 +1,9 @@
 from typing import Protocol
 from uuid import UUID
-from keel.domain.run import Run
+from keel.domain.run import Run, RunKey
 
 
 class RunRepository(Protocol):
     def add(self, run: Run) -> None: ...
     def get(self, run_id: UUID) -> Run | None: ...
+    def latest_for_key(self, key: RunKey) -> Run | None: ...

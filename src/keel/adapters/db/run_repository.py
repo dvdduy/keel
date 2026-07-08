@@ -1,6 +1,6 @@
 from uuid import UUID
 from sqlalchemy.orm import Session
-from keel.domain.run import Run
+from keel.domain.run import Run, RunKey
 from keel.adapters.db.models import RunRecord
 from keel.adapters.db.translators import run_to_record, record_to_run
 
@@ -17,3 +17,6 @@ class SqlAlchemyRunRepository:
     def get(self, run_id: UUID) -> Run | None:
         run_record = self._session.get(RunRecord, run_id)
         return record_to_run(run_record) if run_record else None
+
+    def latest_for_key(self, key: RunKey) -> Run | None:
+        raise NotImplementedError("Run key persistence is implemented in Day 10 CP2")

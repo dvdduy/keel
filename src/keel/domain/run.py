@@ -55,6 +55,7 @@ class Run:
     started_at: datetime | None = None
     finished_at: datetime | None = None
     steps: list[RunStep] = field(default_factory=list)
+    watermark: str | None = None
 
     def start(self, now: datetime) -> None:
         self._transition(expected=RunStatus.PENDING, next_status=RunStatus.RUNNING, action="start")
@@ -97,3 +98,19 @@ class Pipeline:
     team_id: UUID
     created_at: datetime
     runs: list[Run] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class RunKey:
+    pipeline_id: UUID
+    watermark: str
+
+
+def is_replayable(existing: Run | None) -> bool:
+    """True unless a SUCCESS run already claims this key.
+
+    None -> True.
+    FAILED/PENDING/RUNNING -> True.
+    SUCCESS -> False.
+    """
+    return existing is None or existing.status is not RunStatus.SUCCESS

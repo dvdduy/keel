@@ -8,6 +8,12 @@ from keel.domain.run import Run
 
 
 class PipelineExecutor(Protocol):
-    def execute(self, pipeline_id: UUID, plan: ExecutionPlan) -> Run:
+    def execute(
+        self,
+        pipeline_id: UUID,
+        plan: ExecutionPlan,
+        *,
+        watermark: str | None = None,
+    ) -> Run:
         """Execute a compiled plan for a pipeline, returning the resulting Run."""
         ...

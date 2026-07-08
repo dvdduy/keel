@@ -197,3 +197,17 @@
 ### Talking point banked
 
 "Airflow is a pluggable backend — ordering is pure application logic, lifecycle rules live in the domain, step execution is a handler port, and the local runner is just one adapter behind the executor seam."
+
+## Day 10 — Idempotency & re-runs
+- Date: 2026-07-08
+- Done:
+  - Added `RunKey(pipeline_id, watermark)` as the logical run identity.
+  - Added nullable `Run.watermark` for keyed and legacy/ad-hoc runs.
+  - Added pure domain replay policy: only a prior `SUCCESS` blocks re-execution; `FAILED`, `PENDING`, and `RUNNING` remain replayable for the local runner.
+  - Added `RunRepository.latest_for_key`.
+  - Added `TriggerRun` use case that checks the key, delegates execution, and returns whether work actually ran.
+  - Proved idempotency with a spy executor: retriggering the same successful key returns the existing run and does not call the executor again.
+- Tests: `tests/test_trigger_run.py` green; 9 tests passed.
+
+### Talking point banked
+"Re-runs are idempotent at the logical batch level: `RunKey(pipeline_id, watermark)` separates 'what work is this?' from 'which attempt is this?', so a successful batch cannot be executed twice while failed attempts remain safely retryable."

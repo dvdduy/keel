@@ -18,13 +18,16 @@ class LocalExecutor:
     handler: StepHandler
     clock: Callable[[], datetime]
 
-    def execute(self, pipeline_id: UUID, plan: ExecutionPlan) -> Run:
+    def execute(
+        self, pipeline_id: UUID, plan: ExecutionPlan, *, watermark: str | None = None
+    ) -> Run:
         ordered_steps = topological_order(plan)
 
         run = Run(
             id=uuid4(),
             pipeline_id=pipeline_id,
             created_at=self.clock(),
+            watermark=watermark,
         )
         run.start(self.clock())
 
