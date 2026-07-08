@@ -1,6 +1,16 @@
 from datetime import datetime
 from uuid import UUID
-from sqlalchemy import Enum as SAEnum, ForeignKey, UniqueConstraint, DateTime
+from sqlalchemy import (
+    BigInteger,
+    Enum as SAEnum,
+    ForeignKey,
+    UniqueConstraint,
+    DateTime,
+    Identity,
+    Index,
+    String,
+    Text,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from keel.domain.run import RunStatus
 
@@ -48,3 +58,24 @@ class PipelineRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (UniqueConstraint("team_id", "name", name="uq_team_pipelinename"),)
+
+
+class SpecVersionRecord(Base):
+    __tablename__ = "spec_versions"
+
+    version_id: Mapped[UUID] = mapped_column(primary_key=True)
+    pipeline_id: Mapped[UUID] = mapped_column(ForeignKey("pipelines.id"))
+    spec_id: Mapped[str] = mapped_column(String(64), index=True)
+    parent_id: Mapped[UUID | None] = mapped_column(ForeignKey("spec_versions.version_id"))
+    content: Mapped[str] = mapped_column(Text)
+    seq: Mapped[int] = mapped_column(BigInteger, Identity(always=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("ix_spec_versions_pipeline_seq", "pipeline_id", "seq"),
+        UniqueConstraint(
+            "pipeline_id",
+            "parent_id",
+            name="uq_spec_versions_pipeline_parent",
+        ),
+    )
