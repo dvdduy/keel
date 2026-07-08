@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     Enum as SAEnum,
     ForeignKey,
     UniqueConstraint,
@@ -10,6 +11,7 @@ from sqlalchemy import (
     Index,
     String,
     Text,
+    false,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from keel.domain.run import RunStatus
@@ -70,6 +72,7 @@ class SpecVersionRecord(Base):
     content: Mapped[str] = mapped_column(Text)
     seq: Mapped[int] = mapped_column(BigInteger, Identity(always=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    breaking_override: Mapped[bool] = mapped_column(Boolean, server_default=false())
 
     __table_args__ = (
         Index("ix_spec_versions_pipeline_seq", "pipeline_id", "seq"),

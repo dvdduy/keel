@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 
 from keel.adapters.db.models import SpecVersionRecord
 from keel.adapters.db.spec_version_repository import SqlAlchemySpecVersionRepository
+from keel.application.specs.models import ColumnType, ContractColumn, PipelineSpec
 from keel.application.specs.parser import parse_pipeline_spec_yaml
 from keel.application.use_cases.submit_spec import SubmitSpec
 from keel.application.specs.versioning import SpecVersion
@@ -35,6 +36,21 @@ freshness:
   max_age_minutes: 60
 quality_checks: []
 """)
+
+
+def _dropped_amount_spec() -> PipelineSpec:
+    spec = _spec()
+    return spec.model_copy(
+        update={
+            "contract": (
+                ContractColumn(
+                    name="order_id",
+                    type=ColumnType.STRING,
+                    nullable=True,
+                ),
+            )
+        }
+    )
 
 
 def test_submit_identical_twice_persists_one_row(session, seeded_pipeline) -> None:
@@ -112,3 +128,29 @@ def test_same_parent_fork_is_rejected(session, seeded_pipeline) -> None:
     with pytest.raises(IntegrityError):
         with session.begin_nested():
             repo.add(forked_child)
+
+
+def test_breaking_override_persists_across_round_trip(
+    session,
+    seeded_pipeline,
+) -> None:
+    pipeline_id = _pipeline_id(seeded_pipeline)
+    repo = SqlAlchemySpecVersionRepository(session)
+    submit = SubmitSpec(repo)
+
+    submit.submit(pipeline_id, _spec())
+
+    result = submit.submit(
+        pipeline_id,
+        _dropped_amount_spec(),
+        allow_breaking=True,
+    )
+
+    assert result.version.breaking_override is True
+
+    session.expire_all()
+
+    head = repo.head_for(pipeline_id)
+
+    assert head is not None
+    assert head.breaking_override is True

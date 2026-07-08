@@ -118,19 +118,37 @@
 
 ## Day 7 — Contract compatibility engine
 
-### Done
-- Added pure contract compatibility engine with truth-table coverage.
-- Compatibility is checked by column name, so reorder is safe.
-- Implemented explicit widening lattice: integer → decimal only.
-- Covered compatible changes: identical contract, add nullable column, widen integer to decimal, relax not-null to nullable, reorder columns.
-- Covered breaking changes: dropped column, rename-as-drop, narrowing decimal to integer, unrelated type change, nullable → not-null, required column added.
-- Engine reports all breaking changes, including multiple breaking dimensions on the same column.
-- Wired compatibility into `SubmitSpec`: breaking updates are rejected by default and do not append a new version.
-- Added explicit `allow_breaking` override; overridden breaking updates are recorded with `breaking_override=True`.
-- Preserved ordering invariant: identical resubmits and first submits never run compatibility checks.
+* Date: 2026-07-08
+* Done:
 
-### Current status
-- CP1 and CP2 complete and green.
+  * Added a pure compatibility engine for pipeline contract evolution.
+  * Compatibility is checked by column name, so column reorder is safe.
+  * Implemented the explicit widening lattice: `integer -> decimal` only.
+  * Compatible changes covered: identical contract, add nullable column, widen integer to decimal, relax not-null to nullable, reorder columns.
+  * Breaking changes covered: dropped column, rename-as-drop, narrowing decimal to integer, unrelated type change, nullable -> not-null, required column added.
+  * Engine reports all breaking changes, including multiple breaking dimensions on the same column.
+  * Tests now use real `PipelineSpec` / `ContractColumn` objects instead of duck-typed fakes.
+  * Wired compatibility into `SubmitSpec`: breaking updates are rejected by default and do not append a new spec version.
+  * Added explicit `allow_breaking` override; overridden breaking updates are recorded with `breaking_override=True`.
+  * Preserved ordering invariant: identical resubmits and first submits never run compatibility checks.
+  * Persisted `breaking_override` through the SQL adapter: Alembic migration, ORM mapping, translators, and repository round-trip coverage.
+  * Added DB round-trip coverage using `session.expire_all()` to prove the audit flag survives a real database read, not just SQLAlchemy's identity map.
 
-### Open thread
-- `breaking_override` is recorded in the domain version during submit, but is not persisted through the SQL adapter yet. CP3 should add the migration, ORM column, translators, and repository round-trip coverage.
+### Design decisions
+
+* Compatibility is modeled as one invariant: the proposed contract must accept every dataset accepted by the previous contract.
+* Column removal is treated as a separate consumer-surface rule: even if data could be ignored, dropping a queryable column removes a consumer capability and is breaking.
+* Breaking changes are reported per column and per dimension, not collapsed per column. A single column can produce multiple breaking facts, such as type change plus nullable tightening.
+* Compatibility reports preserve contract order instead of sorting, because the natural order mirrors the producer's schema and remains deterministic.
+* The database keeps a `server_default=false()` for `breaking_override` to backfill existing rows. In a stricter production setup, I would use the server default for the migration/backfill, then drop it in a follow-up migration so the application remains the single source of truth.
+
+### Validation
+
+* `pytest tests/test_spec_compatibility.py -q` passed.
+* `pytest tests/test_spec_versioning.py -q` passed.
+* `pytest tests/test_spec_version_repository.py -q` passed after `alembic upgrade head`.
+* `make check` passed.
+
+### Talking point banked
+
+"Keel lets producers evolve schemas without shattering consumers. Instead of a hand-maintained table of breaking-change rules, I reduced the taxonomy to one invariant — the new contract must accept every dataset the old one accepted — plus a consumer-surface rule that columns cannot be silently dropped. Breaking changes are rejected by default with a structured diff, and the override is explicit and audited, so 'move fast' is a deliberate, recorded decision, not an accident."

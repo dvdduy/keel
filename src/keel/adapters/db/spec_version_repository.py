@@ -17,6 +17,7 @@ def spec_version_to_record(version: SpecVersion) -> SpecVersionRecord:
         parent_id=version.parent_id,
         content=version.content,
         created_at=version.created_at,
+        breaking_override=version.breaking_override,
     )
 
 
@@ -28,6 +29,7 @@ def record_to_spec_version(record: SpecVersionRecord) -> SpecVersion:
         parent_id=record.parent_id,
         content=record.content,
         created_at=record.created_at,
+        breaking_override=record.breaking_override,
     )
 
 
