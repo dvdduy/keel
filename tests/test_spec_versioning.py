@@ -3,12 +3,54 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from uuid import UUID, uuid4
+import pytest
 
 from keel.application.specs.parser import parse_pipeline_spec_yaml
 from keel.application.specs.versioning import SpecVersion, spec_content_hash
+import keel.application.use_cases.submit_spec as submit_spec_module
 from keel.application.use_cases.submit_spec import SubmitSpec
+from keel.application.specs.compatibility import BreakingKind, IncompatibleSpecError
+from keel.application.specs.models import (
+    ColumnType,
+    ContractColumn,
+    FreshnessSpec,
+    PipelineSpec,
+    SourceSpec,
+    SourceType,
+)
 
 _HEX_64 = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _column(
+    name: str,
+    column_type: ColumnType,
+    *,
+    nullable: bool,
+) -> ContractColumn:
+    return ContractColumn(name=name, type=column_type, nullable=nullable)
+
+
+def _valid_spec() -> PipelineSpec:
+    return PipelineSpec(
+        name="orders_daily",
+        team="analytics",
+        owner="data-platform@example.com",
+        source=SourceSpec(type=SourceType.CSV, path="tests/fixtures/orders.csv"),
+        destination="analytics.orders",
+        contract=(
+            _column("order_id", ColumnType.INTEGER, nullable=False),
+            _column("amount", ColumnType.DECIMAL, nullable=True),
+        ),
+        freshness=FreshnessSpec(max_age_minutes=60),
+    )
+
+
+def _with_contract(
+    spec: PipelineSpec,
+    columns: tuple[ContractColumn, ...],
+) -> PipelineSpec:
+    return spec.model_copy(update={"contract": columns})
 
 
 class FakeSpecVersionRepository:
@@ -165,3 +207,117 @@ def test_revert_appends_new_version_with_recurring_hash() -> None:
     assert third.version.parent_id == second.version.version_id
     assert third.version.spec_id == first.version.spec_id
     assert len(repo.history[pipeline_id]) == 3
+
+
+def test_compatible_update_is_created_without_override() -> None:
+    repository = FakeSpecVersionRepository()
+    submitter = SubmitSpec(repository)
+    pipeline_id = uuid4()
+
+    previous = _valid_spec()
+    first = submitter.submit(pipeline_id, previous)
+
+    proposed = _with_contract(
+        previous,
+        (
+            *previous.contract,
+            _column("notes", ColumnType.STRING, nullable=True),
+        ),
+    )
+
+    result = submitter.submit(pipeline_id, proposed)
+
+    assert result.created is True
+    assert result.version.breaking_override is False
+    assert result.version.parent_id == first.version.version_id
+
+
+def test_breaking_update_is_rejected_by_default() -> None:
+    repository = FakeSpecVersionRepository()
+    submitter = SubmitSpec(repository)
+    pipeline_id = uuid4()
+
+    previous = _valid_spec()
+    first = submitter.submit(pipeline_id, previous)
+
+    proposed = _with_contract(
+        previous,
+        (_column("order_id", ColumnType.INTEGER, nullable=False),),
+    )
+
+    with pytest.raises(IncompatibleSpecError) as exc_info:
+        submitter.submit(pipeline_id, proposed)
+
+    assert BreakingKind.COLUMN_DROPPED in {
+        change.kind for change in exc_info.value.report.breaking_changes
+    }
+    assert repository.head_for(pipeline_id) == first.version
+
+
+def test_breaking_update_with_allow_breaking_records_override() -> None:
+    repository = FakeSpecVersionRepository()
+    submitter = SubmitSpec(repository)
+    pipeline_id = uuid4()
+
+    previous = _valid_spec()
+    first = submitter.submit(pipeline_id, previous)
+
+    proposed = _with_contract(
+        previous,
+        (_column("order_id", ColumnType.INTEGER, nullable=False),),
+    )
+
+    result = submitter.submit(pipeline_id, proposed, allow_breaking=True)
+
+    assert result.created is True
+    assert result.version.breaking_override is True
+    assert result.version.parent_id == first.version.version_id
+    assert repository.head_for(pipeline_id) == result.version
+
+
+def test_identical_resubmit_skips_compatibility_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = FakeSpecVersionRepository()
+    submitter = SubmitSpec(repository)
+    pipeline_id = uuid4()
+
+    spec = _valid_spec()
+    first = submitter.submit(pipeline_id, spec)
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("compatibility check should not run for no-op resubmit")
+
+    monkeypatch.setattr(
+        submit_spec_module,
+        "check_compatibility",
+        fail_if_called,
+    )
+
+    result = submitter.submit(pipeline_id, spec)
+
+    assert result.created is False
+    assert result.version == first.version
+
+
+def test_first_submit_never_runs_compatibility(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = FakeSpecVersionRepository()
+    submitter = SubmitSpec(repository)
+    pipeline_id = uuid4()
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("compatibility check should not run for first submit")
+
+    monkeypatch.setattr(
+        submit_spec_module,
+        "check_compatibility",
+        fail_if_called,
+    )
+
+    result = submitter.submit(pipeline_id, _valid_spec())
+
+    assert result.created is True
+    assert result.version.breaking_override is False
+    assert result.version.parent_id is None

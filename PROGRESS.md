@@ -119,13 +119,18 @@
 ## Day 7 — Contract compatibility engine
 
 ### Done
-- Added pure compatibility engine for pipeline contract evolution.
-- Compatibility is checked by column name, so column reorder is safe.
-- Implemented the allowed widening lattice: integer → decimal only.
-- Compatible changes covered: identical contract, add nullable column, widen integer to decimal, relax not-null to nullable, reorder columns.
-- Breaking changes covered: dropped column, rename-as-drop, narrowing decimal to integer, unrelated type change, nullable → not-null, required column added.
-- Engine reports all breaking changes instead of failing on the first one.
+- Added pure contract compatibility engine with truth-table coverage.
+- Compatibility is checked by column name, so reorder is safe.
+- Implemented explicit widening lattice: integer → decimal only.
+- Covered compatible changes: identical contract, add nullable column, widen integer to decimal, relax not-null to nullable, reorder columns.
+- Covered breaking changes: dropped column, rename-as-drop, narrowing decimal to integer, unrelated type change, nullable → not-null, required column added.
+- Engine reports all breaking changes, including multiple breaking dimensions on the same column.
+- Wired compatibility into `SubmitSpec`: breaking updates are rejected by default and do not append a new version.
+- Added explicit `allow_breaking` override; overridden breaking updates are recorded with `breaking_override=True`.
+- Preserved ordering invariant: identical resubmits and first submits never run compatibility checks.
 
 ### Current status
-- CP1 complete and green.
-- CP2 next: wire compatibility into `SubmitSpec.submit`, reject breaking updates by default, and add audited `allow_breaking` override.
+- CP1 and CP2 complete and green.
+
+### Open thread
+- `breaking_override` is recorded in the domain version during submit, but is not persisted through the SQL adapter yet. CP3 should add the migration, ORM column, translators, and repository round-trip coverage.

@@ -5,8 +5,16 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from keel.application.ports.spec_version_repo import SpecVersionRepository
+from keel.application.specs.compatibility import (
+    IncompatibleSpecError,
+    check_compatibility,
+)
 from keel.application.specs.models import PipelineSpec
-from keel.application.specs.versioning import SpecVersion, canonical_spec_json, content_sha256
+from keel.application.specs.versioning import (
+    SpecVersion,
+    canonical_spec_json,
+    content_sha256,
+)
 
 
 @dataclass(frozen=True)
@@ -19,7 +27,13 @@ class SubmitResult:
 class SubmitSpec:
     versions: SpecVersionRepository
 
-    def submit(self, pipeline_id: UUID, spec: PipelineSpec) -> SubmitResult:
+    def submit(
+        self,
+        pipeline_id: UUID,
+        spec: PipelineSpec,
+        *,
+        allow_breaking: bool = False,
+    ) -> SubmitResult:
         content = canonical_spec_json(spec)
         spec_id = content_sha256(content)
         head = self.versions.head_for(pipeline_id)
@@ -27,13 +41,28 @@ class SubmitSpec:
         if head is not None and head.spec_id == spec_id:
             return SubmitResult(version=head, created=False)
 
+        breaking_override = False
+
+        if head is not None:
+            previous = PipelineSpec.model_validate_json(head.content)
+            report = check_compatibility(previous, spec)
+
+            if not report.compatible:
+                if not allow_breaking:
+                    raise IncompatibleSpecError(report)
+
+                breaking_override = True
+
         version = SpecVersion(
             version_id=uuid4(),
             pipeline_id=pipeline_id,
             spec_id=spec_id,
             parent_id=head.version_id if head is not None else None,
-            content=canonical_spec_json(spec),
+            content=content,
             created_at=datetime.now(UTC),
+            breaking_override=breaking_override,
         )
+
         self.versions.add(version)
+
         return SubmitResult(version=version, created=True)

@@ -40,3 +40,4 @@ class SpecVersion:
     parent_id: UUID | None
     content: str
     created_at: datetime
+    breaking_override: bool = False
