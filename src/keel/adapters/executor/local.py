@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 from keel.application.execution.plan import ExecutionPlan
 from keel.application.execution.topology import topological_order
 from keel.application.ports.run_repo import RunRepository
-from keel.application.ports.step_handler import StepHandler
+from keel.application.ports.step_handler import Compensation, StepHandler
 from keel.domain.run import Run, RunStep
 
 
@@ -22,6 +22,7 @@ class LocalExecutor:
         self, pipeline_id: UUID, plan: ExecutionPlan, *, watermark: str | None = None
     ) -> Run:
         ordered_steps = topological_order(plan)
+        compensations: list[Compensation] = []
 
         run = Run(
             id=uuid4(),
@@ -40,19 +41,32 @@ class LocalExecutor:
                 created_at=self.clock(),
             )
             run.add_step(run_step)
-
             run_step.start()
 
             try:
-                self.handler.run(plan_step)
+                compensation = self.handler.run(plan_step)
             except Exception:
                 run_step.fail()
+                self._rollback(compensations)
                 run.fail(self.clock())
                 self.runs.add(run)
                 return run
 
             run_step.succeed()
+            compensations.append(compensation)
 
         run.succeed(self.clock())
         self.runs.add(run)
         return run
+
+    @staticmethod
+    def _rollback(compensations: list[Compensation]) -> None:
+        for compensate in reversed(compensations):
+            try:
+                compensate()
+            except Exception:
+                """
+                The pass is intentional here: rollback is best-effort and exhaustive.
+                A failed undo must not prevent earlier steps from being undone.
+                """
+                pass

@@ -16,6 +16,10 @@ class WarehouseAdapter(Protocol):
 
     def row_count(self, table: str) -> int: ...
 
+    def drop_table(self, table: str) -> None:
+        """Drop `table` if it exists."""
+        ...
+
     def describe_table(self, table: str) -> ObservedSchema | None:
         """Observed schema of `table`, or None if the table does not exist.
 

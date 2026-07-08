@@ -4,10 +4,16 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-
 from keel.adapters.executor.local import LocalExecutor
-from keel.application.execution.plan import ExecutionPlan, IngestStep, QualityStep, TransformStep
+from keel.application.execution.plan import (
+    ExecutionPlan,
+    IngestStep,
+    PlanStep,
+    QualityStep,
+    TransformStep,
+)
 from keel.application.execution.topology import topological_order
+from keel.application.ports.step_handler import Compensation
 from keel.application.specs.models import QualityCheckType
 from keel.domain.run import Run, RunStatus
 
@@ -23,13 +29,24 @@ class FakeRunRepository:
 @dataclass
 class RecordingStepHandler:
     fail_on: str | None = None
+    fail_undo_on: set[str] = field(default_factory=set)
     calls: list[str] = field(default_factory=list)
+    undo_calls: list[str] = field(default_factory=list)
 
-    def run(self, step) -> None:  # noqa: ANN001
+    def run(self, step: PlanStep) -> Compensation:
         self.calls.append(step.key)
 
         if step.key == self.fail_on:
             raise RuntimeError(f"boom: {step.key}")
+
+        key = step.key
+
+        def compensate() -> None:
+            self.undo_calls.append(key)
+            if key in self.fail_undo_on:
+                raise RuntimeError(f"undo boom: {key}")
+
+        return compensate
 
 
 @dataclass
@@ -128,4 +145,63 @@ def test_run_persisted_via_repository() -> None:
 
     run = executor.execute(uuid4(), _plan())
 
+    assert runs.added == [run]
+
+
+def test_happy_path_runs_no_compensations() -> None:
+    runs = FakeRunRepository()
+    handler = RecordingStepHandler()
+    executor = LocalExecutor(runs=runs, handler=handler, clock=FakeClock())
+
+    executor.execute(uuid4(), _plan())
+
+    assert handler.undo_calls == []
+
+
+def test_failure_compensates_prior_steps_in_reverse_order() -> None:
+    runs = FakeRunRepository()
+    handler = RecordingStepHandler(fail_on="quality:not_null:order_id")
+    executor = LocalExecutor(runs=runs, handler=handler, clock=FakeClock())
+
+    run = executor.execute(uuid4(), _plan())
+
+    assert run.status == RunStatus.FAILED
+    assert handler.calls == ["ingest", "transform", "quality:not_null:order_id"]
+    assert handler.undo_calls == ["transform", "ingest"]
+
+
+def test_first_step_failure_compensates_nothing() -> None:
+    runs = FakeRunRepository()
+    handler = RecordingStepHandler(fail_on="ingest")
+    executor = LocalExecutor(runs=runs, handler=handler, clock=FakeClock())
+
+    run = executor.execute(uuid4(), _plan())
+
+    assert run.status == RunStatus.FAILED
+    assert handler.calls == ["ingest"]
+    assert handler.undo_calls == []
+
+
+def test_compensation_failure_does_not_abort_rollback() -> None:
+    runs = FakeRunRepository()
+    handler = RecordingStepHandler(
+        fail_on="quality:not_null:order_id",
+        fail_undo_on={"transform"},
+    )
+    executor = LocalExecutor(runs=runs, handler=handler, clock=FakeClock())
+
+    run = executor.execute(uuid4(), _plan())
+
+    assert run.status == RunStatus.FAILED
+    assert handler.undo_calls == ["transform", "ingest"]
+
+
+def test_run_still_persisted_once_after_rollback() -> None:
+    runs = FakeRunRepository()
+    handler = RecordingStepHandler(fail_on="quality:not_null:order_id")
+    executor = LocalExecutor(runs=runs, handler=handler, clock=FakeClock())
+
+    run = executor.execute(uuid4(), _plan())
+
+    assert run.status == RunStatus.FAILED
     assert runs.added == [run]

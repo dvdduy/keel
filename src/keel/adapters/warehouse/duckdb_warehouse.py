@@ -36,6 +36,12 @@ class DuckDbWarehouse:
         assert result is not None
         return int(result[0])
 
+    def drop_table(self, table: str) -> None:
+        try:
+            self._con.execute(f"DROP TABLE IF EXISTS {table}")
+        except duckdb.Error as exc:
+            raise WarehouseError(f"failed to drop DuckDB table {table!r}") from exc
+
     def describe_table(self, table: str) -> ObservedSchema | None:
         try:
             rows = self._con.execute(f"DESCRIBE {table}").fetchall()
