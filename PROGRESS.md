@@ -494,3 +494,25 @@
 
 ### Talking point banked
 "Declared lineage is verified against the dbt manifest, but the work is in the scoping, not the diff. I translate dbt's source/ref graph into the platform's physical-table vocabulary so both sides speak one language, then diff only within the frontier the spec governs - so an unrelated model in the same dbt project isn't false drift, and my CSV ingestion edge isn't flagged as missing just because dbt can't see it. A swapped upstream then reads as exactly one missing edge and one undeclared edge: desired-vs-actual, scoped to the oracle's jurisdiction."
+
+## Day 24 - Pure SLO evaluator
+- Date: 2026-07-09
+- Done:
+  - Added `application.slo` with pure SLO value objects for tri-state observations, unknown policy, SLO definitions, statuses, and evaluation results.
+  - Implemented `evaluate_slo(slo, observations, now)` as source-agnostic arithmetic over dated observations with no persistence or I/O.
+  - Enforced the time-window contract: `[now - window, now]`, lower bound inclusive, future observations excluded, and timezone-aware datetimes required.
+  - Modeled unknown handling as policy: default `COUNT_AS_BAD` spends budget, while `EXCLUDE` shrinks the denominator.
+  - Returned `NO_DATA` with `attainment=None` for empty valid windows, never a false-green `MEETING`.
+  - Added error-budget accounting: allowed bad count, consumed budget, and remaining budget, including negative remaining budget when overspent.
+  - Added projection helpers for freshness and quality results into SLO observations, keeping the evaluator source-agnostic.
+  - Covered all Day 24 evaluator invariants in `tests/test_slo.py`.
+  - Verified `ruff`, `black --check`, `mypy`, all 236 tests, and import-linter.
+
+### Design decisions
+- Window is wall-clock `timedelta`, not last-N observations, because SLOs should answer how healthy the dataset was over the period a consumer experienced.
+- Empty windows return `NO_DATA`, not `MEETING`, matching the platform's fail-closed instinct around missing evidence.
+- The evaluator knows only `GOOD` / `BAD` / `UNKNOWN` observations; freshness and quality are projected at the boundary instead of leaking source-specific meanings into SLO math.
+- Freshness projection requires a dated result. A freshness result with no `as_of` has no honest observation timestamp, so the helper raises rather than inventing one.
+
+### Talking point banked
+"Data SLOs are not service SLOs with different labels. Keel first manufactures a dated observation stream, then applies pure SLO arithmetic over a wall-clock window, with UNKNOWN as an explicit policy choice. That keeps freshness and quality sources pluggable while preserving the part consumers actually feel: how much of the last period the dataset was trustworthy."
