@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from keel.adapters.db.models import SpecVersionRecord
@@ -50,3 +50,22 @@ class SqlAlchemySpecVersionRepository:
         )
         record = self._session.execute(stmt).scalar_one_or_none()
         return None if record is None else record_to_spec_version(record)
+
+    def heads(self) -> tuple[SpecVersion, ...]:
+        ranked = select(
+            SpecVersionRecord.version_id,
+            func.row_number()
+            .over(
+                partition_by=SpecVersionRecord.pipeline_id,
+                order_by=desc(SpecVersionRecord.seq),
+            )
+            .label("rank"),
+        ).subquery()
+        stmt = (
+            select(SpecVersionRecord)
+            .join(ranked, SpecVersionRecord.version_id == ranked.c.version_id)
+            .where(ranked.c.rank == 1)
+            .order_by(SpecVersionRecord.pipeline_id)
+        )
+        records = self._session.execute(stmt).scalars().all()
+        return tuple(record_to_spec_version(record) for record in records)

@@ -7,8 +7,9 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, select
 
-from keel.adapters.db.models import SpecVersionRecord
+from keel.adapters.db.models import PipelineRecord, SpecVersionRecord, TeamRecord
 from keel.adapters.db.spec_version_repository import SqlAlchemySpecVersionRepository
+from keel.application.lineage.edges import build_lineage_graph
 from keel.application.specs.models import ColumnType, ContractColumn, PipelineSpec
 from keel.application.specs.parser import parse_pipeline_spec_yaml
 from keel.application.use_cases.submit_spec import SubmitSpec
@@ -19,21 +20,27 @@ def _pipeline_id(seeded_pipeline) -> UUID:
     return seeded_pipeline if isinstance(seeded_pipeline, UUID) else seeded_pipeline.id
 
 
-def _spec(destination: str = "analytics.orders"):
+def _spec(
+    destination: str = "analytics.orders",
+    *,
+    source_path: str = "tests/fixtures/orders.csv",
+    transform: str | None = None,
+):
+    transform_line = f"transform: {transform}\n" if transform is not None else ""
     return parse_pipeline_spec_yaml(
         f"""name: orders_daily
 team: analytics
 owner: data-platform@example.com
 source:
   type: csv
-  path: tests/fixtures/orders.csv
+  path: {source_path}
 contract:
   - name: order_id
     type: string
   - name: amount
     type: decimal
 destination: {destination}
-freshness:
+{transform_line}freshness:
   max_age_minutes: 60
 quality_checks: []
 """
@@ -156,3 +163,82 @@ def test_breaking_override_persists_across_round_trip(
 
     assert head is not None
     assert head.breaking_override is True
+
+
+def test_heads_returns_latest_version_for_each_pipeline(session) -> None:
+    team = TeamRecord(id=uuid4(), name="analytics_heads", created_at=datetime.now(UTC))
+    session.add(team)
+    session.flush()
+    first_pipeline = PipelineRecord(
+        id=uuid4(),
+        team_id=team.id,
+        name="orders",
+        created_at=team.created_at,
+    )
+    second_pipeline = PipelineRecord(
+        id=uuid4(),
+        team_id=team.id,
+        name="customers",
+        created_at=team.created_at,
+    )
+    session.add_all([first_pipeline, second_pipeline])
+    session.flush()
+
+    repo = SqlAlchemySpecVersionRepository(session)
+    submit = SubmitSpec(repo)
+    first_initial = submit.submit(first_pipeline.id, _spec(destination="analytics.orders"))
+    first_head = submit.submit(first_pipeline.id, _spec(destination="analytics.orders_v2"))
+    second_head = submit.submit(second_pipeline.id, _spec(destination="analytics.customers"))
+
+    heads = repo.heads()
+
+    assert first_initial.version not in heads
+    assert set(heads) == {first_head.version, second_head.version}
+
+
+def test_platform_lineage_graph_builds_from_persisted_heads(session) -> None:
+    team = TeamRecord(id=uuid4(), name="analytics_lineage", created_at=datetime.now(UTC))
+    session.add(team)
+    session.flush()
+    orders_pipeline = PipelineRecord(
+        id=uuid4(),
+        team_id=team.id,
+        name="orders",
+        created_at=team.created_at,
+    )
+    customers_pipeline = PipelineRecord(
+        id=uuid4(),
+        team_id=team.id,
+        name="customers",
+        created_at=team.created_at,
+    )
+    session.add_all([orders_pipeline, customers_pipeline])
+    session.flush()
+
+    repo = SqlAlchemySpecVersionRepository(session)
+    submit = SubmitSpec(repo)
+    submit.submit(
+        orders_pipeline.id,
+        _spec(
+            destination="raw.orders",
+            source_path="tests/fixtures/orders.csv",
+            transform="mart_orders",
+        ),
+    )
+    submit.submit(
+        customers_pipeline.id,
+        _spec(
+            destination="raw.customers",
+            source_path="tests/fixtures/customers.csv",
+            transform="mart_customers",
+        ),
+    )
+
+    graph = build_lineage_graph(repo.heads())
+
+    assert graph.impacted_by("source:csv:tests/fixtures/orders.csv") == frozenset(
+        {"raw.orders", "main.mart_orders"}
+    )
+    assert graph.impacted_by("source:csv:tests/fixtures/customers.csv") == frozenset(
+        {"raw.customers", "main.mart_customers"}
+    )

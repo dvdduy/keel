@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from keel.application.specs.models import PipelineSpec
 from keel.application.specs.versioning import SpecVersion
+
+if TYPE_CHECKING:
+    from keel.application.lineage.graph import LineageGraph
 
 
 @dataclass(frozen=True)
@@ -38,3 +43,12 @@ def edges_for_version(version: SpecVersion) -> frozenset[LineageEdge]:
 
     spec = PipelineSpec.model_validate_json(version.content)
     return declared_edges(spec)
+
+
+def build_lineage_graph(versions: Iterable[SpecVersion]) -> LineageGraph:
+    """Build a platform graph from authoritative spec versions."""
+
+    from keel.application.lineage.graph import LineageGraph
+
+    edges = (edge for version in versions for edge in edges_for_version(version))
+    return LineageGraph.from_edges(edges)

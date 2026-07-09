@@ -61,6 +61,9 @@ class FakeSpecVersionRepository:
         versions = self.history[pipeline_id]
         return versions[-1] if versions else None
 
+    def heads(self) -> tuple[SpecVersion, ...]:
+        return tuple(versions[-1] for versions in self.history.values() if versions)
+
     def add(self, version: SpecVersion) -> None:
         self.history[version.pipeline_id].append(version)
 

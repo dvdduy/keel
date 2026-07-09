@@ -447,3 +447,26 @@
 
 ### Talking point banked
 "I chose declared-and-verified lineage: the spec declares table-level edges as producer intent and the dbt manifest verifies them, rather than parsing SQL — because parsing gives me actual state with nothing to reconcile against, and re-parsing raw model SQL with sqlglot re-solves, worse, the Jinja/ref resolution dbt already did correctly in its manifest."
+
+## Day 22 - Queryable lineage graph / impact analysis
+- Date: 2026-07-09
+- Done:
+  - Added a pure immutable `LineageGraph` over `LineageEdge` values and string nodes.
+  - Implemented cycle-safe BFS for downstream impact analysis and symmetric upstream `feeds` queries.
+  - Defined impact as strictly downstream: unknown nodes return empty results, and the origin is excluded even when reachable through a cycle or self-loop.
+  - Deduplicated repeated edges and diamond fan-out through set-backed adjacency maps.
+  - Added `SpecVersionRepository.heads()` and implemented it for the in-memory fake and SQLAlchemy repository.
+  - Added `build_lineage_graph(versions)` to union `edges_for_version` across authoritative spec heads.
+  - Added integration coverage proving persisted pipeline heads can build a platform graph and recover transitive impact from real spec state.
+  - Verified `ruff`, `black --check`, `mypy`, all 211 tests, and import-linter.
+
+### Design decisions
+- Kept `graph.py` dependency-clean inside `application.lineage`: it knows only `LineageEdge` and string nodes, not `PipelineSpec` or repository details.
+- Put the version-to-graph builder beside the existing version-to-edge projection so spec parsing remains outside the graph data structure.
+- Chose eager adjacency maps in both directions to make `impacted_by` and `feeds` symmetric, fast, and deterministic.
+
+### Known limitation
+- The current DSL still cannot declare cross-pipeline upstreams, so the platform graph is a union of disconnected per-pipeline chains. The engine is ready for the Day 36 blast-radius demo, but the dramatic cross-pipeline edges require the deferred explicit upstream field.
+
+### Talking point banked
+"Impact analysis is graph reachability, but the important production detail is termination. Even if lineage should be a DAG, specs are independently authored inputs, so the traversal treats cycles and self-loops as valid data it must survive. I seed `visited` with the origin, then BFS outward; that gives a strictly downstream casualty set where the changed node is the cause, not part of the answer."
