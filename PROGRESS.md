@@ -537,3 +537,38 @@
 
 ### Talking point banked
 "An incident is a historical snapshot, not a live view. When an SLO breaches, Keel captures the exact evaluation, run context, owner/team, and downstream blast radius at page time, because lineage and ownership drift. Three weeks later, the post-mortem should explain the world as it was when on-call got paged, not the graph as it happens to look today."
+
+## Day 26 - Incident grouping / dedup
+- Date: 2026-07-09
+- Done:
+  - Added pure incident grouping over `LineageGraph` so related breach incidents collapse into deterministic root-cause groups.
+  - Partitioned incidents by connected breaching subjects, keeping isolated breaches separate and fan-out failures together.
+  - Classified upstream incidents as `roots` and downstream incidents as `correlated`, including multi-root shared-downstream cases.
+  - Preserved one incident per SLO on the same subject while grouping those incidents together for page deduplication.
+  - Covered isolated breaches, independent breaches, fan-out, chains, diamond lineage, shared downstreams, repeated SLOs on one subject, empty input, partition guarantees, and deterministic ordering in `tests/test_incident_grouping.py`.
+
+### Design decisions
+- Grouping consumes immutable incident snapshots and a caller-provided graph; it does not reopen incident detection or query live state.
+- The grouping algorithm treats the breaching subgraph as an undirected connected component for membership, then uses edge direction only to classify roots versus correlated symptoms.
+- Output ordering is deterministic so downstream paging and tests do not depend on input order.
+
+### Talking point banked
+"Dedup is a graph problem before it is a notification problem. I first find the connected component of breaching subjects so a single upstream failure does not page once per downstream table, then I use lineage direction to identify the root incidents worth paging on. The grouping is pure and deterministic, which makes later notification policy a projection instead of hidden state."
+
+## Day 27 - Incident lifecycle + routing
+- Date: 2026-07-09
+- Done:
+  - Extended incident models with lifecycle statuses, immutable `IncidentEvent` records, projected `IncidentState`, and `IncidentRoute`.
+  - Added `project_state(events)` as an event-log fold: logs must start with `OPENED`, lifecycle status derives from events, and assignment remains orthogonal to status.
+  - Added `apply_transition(...)` to validate `OPEN -> ACKNOWLEDGED`, `ACKNOWLEDGED -> RESOLVED`, and `OPEN -> RESOLVED` while rejecting terminal or out-of-table transitions.
+  - Added deterministic `route_incident(incident)` routing from the immutable incident snapshot's team and owner.
+  - Covered the requested Day 27 lifecycle and routing truth table in `tests/test_incident_lifecycle.py`.
+  - Verified `ruff`, `black --check`, `mypy`, all 271 tests, and import-linter.
+
+### Design decisions
+- Defined a local `IllegalIncidentTransition` instead of importing `domain.run.IllegalStateTransition`; incident lifecycle and run lifecycle intentionally have different storage models and vocabulary.
+- Chose strict re-ack semantics for now: acknowledging an acknowledged or resolved incident raises. Real pager-style idempotent acknowledgement is a productionization deferral once callers can carry request ids or event ids.
+- Kept incidents event-sourced: the immutable `Incident` remains the opening snapshot, the event log is the audit trail, and current status is only a projection.
+
+### Talking point banked
+"Runs and incidents make opposite storage choices on purpose. A run mutates because it is a short-lived execution artifact where the final state matters most. An incident is event-sourced because the transition history is the product: ack, assignment, and resolution form the timeline post-incident review needs. Status is just a fold over immutable events."

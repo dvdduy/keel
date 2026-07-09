@@ -12,6 +12,40 @@ from keel.domain.run import Run
 
 class IncidentStatus(StrEnum):
     OPEN = "open"
+    ACKNOWLEDGED = "acknowledged"
+    RESOLVED = "resolved"
+
+
+class IncidentEventType(StrEnum):
+    OPENED = "opened"
+    ACKNOWLEDGED = "acknowledged"
+    RESOLVED = "resolved"
+    ASSIGNED = "assigned"
+
+
+@dataclass(frozen=True)
+class IncidentRoute:
+    team: str
+    owner: str
+
+
+@dataclass(frozen=True)
+class IncidentEvent:
+    id: UUID
+    incident_id: UUID
+    type: IncidentEventType
+    at: datetime
+    actor: str
+    note: str | None = None
+    route: IncidentRoute | None = None
+
+
+@dataclass(frozen=True)
+class IncidentState:
+    status: IncidentStatus
+    acknowledged_at: datetime | None
+    resolved_at: datetime | None
+    assignee: IncidentRoute | None
 
 
 @dataclass(frozen=True)
