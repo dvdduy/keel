@@ -516,3 +516,24 @@
 
 ### Talking point banked
 "Data SLOs are not service SLOs with different labels. Keel first manufactures a dated observation stream, then applies pure SLO arithmetic over a wall-clock window, with UNKNOWN as an explicit policy choice. That keeps freshness and quality sources pluggable while preserving the part consumers actually feel: how much of the last period the dataset was trustworthy."
+
+## Day 25 - Pure incident detection
+- Date: 2026-07-09
+- Done:
+  - Added `application.incident` as a dependency-clean, pure incident detection module.
+  - Modeled immutable `Incident` snapshots with injected surrogate identity, SLO breach evidence, run context, owner/team, downstream impact, and opened timestamp.
+  - Added `IncidentContext` so enrichment inputs are explicit and caller-owned.
+  - Implemented `detect_incident(...)` as a memoryless fold from one `SloEvaluation` plus context into an `Incident | None`.
+  - Opened incidents only for `SloStatus.BREACHING`; `MEETING` and `NO_DATA` return `None`.
+  - Snapshotted downstream lineage impact at open time via `LineageGraph.impacted_by(context.subject)`, preserving historical blast radius even if the graph later changes.
+  - Preserved optional run context honestly: `run=None` becomes `run_id=None`.
+  - Covered the Day 25 behavior in `tests/test_incident.py`, including BREACHING-only opening, NO_DATA non-opening, evaluation preservation, transitive impact, leaf impact, run enrichment, owner/team enrichment, injected id, and impact snapshot semantics.
+  - Verified `ruff`, `black --check`, `mypy`, all 247 tests, and import-linter.
+
+### Design decisions
+- `NO_DATA` does not open a breach incident. Missing telemetry and known-bad data are different operational facts, so no-signal monitoring remains a separate future alert path.
+- Detection has no clock or memory. The caller owns cadence and grouping; today deliberately leaves one breach -> one incident so Day 26 can solve repeated pages as its own concept.
+- Incidents store historical evidence, not live pointers. The lineage blast radius, ownership, run id, and SLO evaluation are captured at open time so a post-mortem reflects what Keel knew when it paged.
+
+### Talking point banked
+"An incident is a historical snapshot, not a live view. When an SLO breaches, Keel captures the exact evaluation, run context, owner/team, and downstream blast radius at page time, because lineage and ownership drift. Three weeks later, the post-mortem should explain the world as it was when on-call got paged, not the graph as it happens to look today."
