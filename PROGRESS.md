@@ -287,3 +287,19 @@
 ### Talking point banked
 
 "I integrated dbt as a governed transform layer without coupling Keel to it — dbt runs as a subprocess behind a TransformRunner port, so the codebase contains zero `import dbt`, its dependency pins never touch the control plane, and a model failure is a structured result while only a tool failure raises. Swapping dbt for another SQL transformer is an adapter change."
+
+
+## Day 14 — Layered dbt transforms through one Keel step
+
+* Date: 2026-07-08
+* Done:
+
+  * Added `mart_customer_orders` as a marts-layer dbt model sourced from `ref('stg_orders')`.
+  * Keel transform steps now select the target model plus upstream dbt dependencies with `+model`.
+  * Multi-model transform rollback now compensates every materialized model in reverse build order.
+  * Verified both direct dbt runner behavior and LocalExecutor behavior: staging and marts materialize together, rollback drops both, and mart failures surface model-level detail.
+
+### Talking point banked
+
+"Keel owns the pipeline DAG, but dbt owns the SQL model DAG. A single Keel transform step materializes the requested mart and its upstream dbt models, while Keel still captures per-model status and rolls back every relation built by that step."
+

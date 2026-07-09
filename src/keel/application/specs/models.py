@@ -120,14 +120,22 @@ class PipelineSpec(StrictModel):
     @field_validator("transform")
     @classmethod
     def transform_must_be_identifier_or_none(cls, value: str | None) -> str | None:
+        """Validate the final dbt model output named by the spec.
+
+        The transform field names the final transform output. dbt resolves upstream
+        staging/intermediate layers through ref() dependencies.
+        """
         if value is None:
             return None
 
         value = value.strip()
+
         if not _IDENTIFIER_RE.match(value):
             raise ValueError(
-                "transform must be a valid model reference, " "for example: stg_orders"
+                "transform must name a valid final model output, "
+                "for example: mart_customer_orders"
             )
+
         return value
 
     @model_validator(mode="after")

@@ -41,13 +41,17 @@ class DuckDbStepHandler:
         return lambda: self._drop_relation(step.destination)
 
     def _run_transform(self, step: TransformStep) -> Compensation:
-        result = self.transform_runner.run(step.model)
+        result = self.transform_runner.run(f"+{step.model}")
 
         if not result.ok:
             raise TransformStepFailed(_format_transform_failure(result.models))
 
-        # dbt writes models to main.<model> in the Day 13 profile.
-        return lambda: self._drop_relation(f"main.{step.model}")
+        materialized_models = result.models
+        return lambda: self._drop_materialized_models(materialized_models)
+
+    def _drop_materialized_models(self, models: tuple[ModelResult, ...]) -> None:
+        for model in reversed(models):
+            self._drop_relation(f"main.{model.model}")
 
     def _drop_relation(self, relation: str) -> None:
         warehouse = self.warehouse_factory()

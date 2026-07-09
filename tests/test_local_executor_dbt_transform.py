@@ -4,13 +4,23 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
+import pytest
 
-from keel.adapters.executor.duckdb_step_handler import DuckDbStepHandler
 from keel.adapters.executor.local import LocalExecutor
 from keel.adapters.transform.dbt_runner import DbtTransformRunner
 from keel.adapters.warehouse.duckdb_warehouse import DuckDbWarehouse
-from keel.application.execution.plan import ExecutionPlan, IngestStep, TransformStep
 from keel.domain.run import Run, RunStatus
+from keel.adapters.executor.duckdb_step_handler import (
+    DuckDbStepHandler,
+    TransformStepFailed,
+)
+from keel.application.execution.plan import (
+    ExecutionPlan,
+    IngestStep,
+    QualityStep,
+    TransformStep,
+)
+from keel.application.specs.models import QualityCheckType
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "orders.csv"
@@ -125,3 +135,148 @@ def test_local_executor_marks_transform_result_failure_as_failed_step(tmp_path) 
         RunStatus.SUCCESS,
         RunStatus.FAILED,
     ]
+
+
+def test_transform_step_builds_target_and_upstream_models(tmp_path) -> None:
+    warehouse_path = tmp_path / "warehouse.duckdb"
+
+    def warehouse_factory() -> DuckDbWarehouse:
+        return DuckDbWarehouse(str(warehouse_path))
+
+    handler = DuckDbStepHandler(
+        warehouse_factory=warehouse_factory,
+        transform_runner=DbtTransformRunner(
+            project_dir=PROJECT_DIR,
+            warehouse_path=str(warehouse_path),
+        ),
+    )
+
+    runs = FakeRunRepository()
+    executor = LocalExecutor(runs=runs, handler=handler, clock=FakeClock())
+
+    plan = ExecutionPlan(
+        steps=(
+            IngestStep(
+                key="ingest",
+                depends_on=frozenset(),
+                source_path=str(FIXTURE),
+                destination="raw.orders",
+            ),
+            TransformStep(
+                key="transform",
+                depends_on=frozenset({"ingest"}),
+                model="mart_customer_orders",
+            ),
+        )
+    )
+
+    run = executor.execute(uuid4(), plan)
+
+    assert run.status == RunStatus.SUCCESS
+    assert [step.name for step in run.steps] == ["ingest", "transform"]
+    assert [step.status for step in run.steps] == [
+        RunStatus.SUCCESS,
+        RunStatus.SUCCESS,
+    ]
+
+    warehouse = DuckDbWarehouse(str(warehouse_path))
+    try:
+        assert warehouse.row_count("raw.orders") == 3
+        assert warehouse.row_count("main.stg_orders") == 3
+        assert warehouse.row_count("main.mart_customer_orders") == 2
+    finally:
+        warehouse.close()
+
+
+def test_transform_rollback_drops_all_materialized_models(tmp_path) -> None:
+    warehouse_path = tmp_path / "warehouse.duckdb"
+
+    def warehouse_factory() -> DuckDbWarehouse:
+        return DuckDbWarehouse(str(warehouse_path))
+
+    handler = DuckDbStepHandler(
+        warehouse_factory=warehouse_factory,
+        transform_runner=DbtTransformRunner(
+            project_dir=PROJECT_DIR,
+            warehouse_path=str(warehouse_path),
+        ),
+    )
+
+    runs = FakeRunRepository()
+    executor = LocalExecutor(runs=runs, handler=handler, clock=FakeClock())
+
+    plan = ExecutionPlan(
+        steps=(
+            IngestStep(
+                key="ingest",
+                depends_on=frozenset(),
+                source_path=str(FIXTURE),
+                destination="raw.orders",
+            ),
+            TransformStep(
+                key="transform",
+                depends_on=frozenset({"ingest"}),
+                model="mart_customer_orders",
+            ),
+            QualityStep(
+                key="quality:not_null:order_id",
+                depends_on=frozenset({"transform"}),
+                check=QualityCheckType.NOT_NULL,
+                column="order_id",
+            ),
+        )
+    )
+
+    run = executor.execute(uuid4(), plan)
+
+    assert run.status == RunStatus.FAILED
+    assert [step.name for step in run.steps] == [
+        "ingest",
+        "transform",
+        "quality:not_null:order_id",
+    ]
+    assert [step.status for step in run.steps] == [
+        RunStatus.SUCCESS,
+        RunStatus.SUCCESS,
+        RunStatus.FAILED,
+    ]
+
+    warehouse = DuckDbWarehouse(str(warehouse_path))
+    try:
+        assert warehouse.describe_table("main.stg_orders") is None
+        assert warehouse.describe_table("main.mart_customer_orders") is None
+    finally:
+        warehouse.close()
+
+
+def test_marts_model_failure_is_a_failed_step_with_model_detail(tmp_path) -> None:
+    warehouse_path = tmp_path / "warehouse.duckdb"
+
+    def warehouse_factory() -> DuckDbWarehouse:
+        return DuckDbWarehouse(str(warehouse_path))
+
+    warehouse = DuckDbWarehouse(str(warehouse_path))
+    try:
+        warehouse.ingest_csv("raw.orders", FIXTURE)
+    finally:
+        warehouse.close()
+
+    handler = DuckDbStepHandler(
+        warehouse_factory=warehouse_factory,
+        transform_runner=DbtTransformRunner(
+            project_dir=PROJECT_DIR,
+            warehouse_path=str(warehouse_path),
+        ),
+    )
+
+    with pytest.raises(TransformStepFailed) as exc:
+        handler.run(
+            TransformStep(
+                key="transform",
+                depends_on=frozenset(),
+                model="broken_mart_customer_orders",
+            )
+        )
+
+    assert "broken_mart_customer_orders" in str(exc.value)
+    assert "error" in str(exc.value)
