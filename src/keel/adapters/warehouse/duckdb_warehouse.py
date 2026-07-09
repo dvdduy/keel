@@ -94,6 +94,36 @@ class DuckDbWarehouse:
 
         return value.astimezone(timezone.utc)
 
+    def null_count(self, table: str, column: str) -> int:
+        table_sql = _quote_qualified_identifier(table)
+        column_sql = _quote_identifier(column)
+
+        try:
+            row = self._con.execute(
+                f"SELECT count(*) FROM {table_sql} WHERE {column_sql} IS NULL"
+            ).fetchone()
+        except (duckdb.CatalogException, duckdb.BinderException, duckdb.Error) as exc:
+            raise WarehouseError(f"failed to read null count from {table!r}.{column!r}") from exc
+
+        assert row is not None
+        return int(row[0])
+
+    def distinct_count(self, table: str, column: str) -> int:
+        table_sql = _quote_qualified_identifier(table)
+        column_sql = _quote_identifier(column)
+
+        try:
+            row = self._con.execute(
+                f"SELECT count(DISTINCT {column_sql}) FROM {table_sql}"
+            ).fetchone()
+        except (duckdb.CatalogException, duckdb.BinderException, duckdb.Error) as exc:
+            raise WarehouseError(
+                f"failed to read distinct count from {table!r}.{column!r}"
+            ) from exc
+
+        assert row is not None
+        return int(row[0])
+
     @staticmethod
     def _to_column_type(physical_type: str) -> ColumnType:
         normalized = physical_type.upper()

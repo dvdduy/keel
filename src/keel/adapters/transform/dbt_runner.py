@@ -90,7 +90,9 @@ class DbtTransformRunner:
                 check=False,
             )
         except OSError as exc:
-            raise TransformError("transform tool failed to start") from exc
+            raise TransformError(
+                f"transform tool failed to start: {self.executable!r} ({exc})"
+            ) from exc
 
         return _load_run_results(
             artifact_path=artifact_path,

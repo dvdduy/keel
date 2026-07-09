@@ -349,3 +349,17 @@
 
 ### Talking point banked
 "Freshness is resolved in two layers: a policy layer chooses the as-of clock, then a pure evaluator applies the threshold. That separation lets Keel support event-time freshness, wall-clock fallback, and future business-calendar modifiers without rewriting the freshness arithmetic."
+
+
+## Day 17 — Column quality checks on the measure-then-judge seam
+- Date: 2026-07-08
+- Done:
+  - Added a pure quality-check evaluator for single-snapshot column predicates: `not_null` and `unique`.
+  - Added warehouse-backed column measurements for row count, null count, and distinct non-null count.
+  - Preserved the freshness pattern: measure facts at the adapter seam, judge them in pure application logic.
+  - Missing/unobservable columns return `UNKNOWN`, not false `FAILED`.
+  - Deferred referential integrity because the spec DSL has no foreign-key relationship yet.
+  - Deferred volume anomaly because anomaly detection needs stored historical baselines.
+
+### Talking point banked
+"I classified quality checks by the state each one needs to judge — single-snapshot column predicates, cross-table relational checks, and stateful historical checks. I built the self-contained class on the same measure-facts-then-judge seam as freshness, so the evaluator is pure, warehouse-free, and testable. Referential integrity is deferred until the DSL can declare foreign keys; volume anomaly is deferred until Keel stores a historical baseline."

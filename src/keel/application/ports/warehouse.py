@@ -39,3 +39,11 @@ class WarehouseAdapter(Protocol):
         Raises WarehouseError when the table/column/type cannot be translated.
         """
         ...
+
+    def null_count(self, table: str, column: str) -> int:
+        """NULLs in column. Raises WarehouseError when unreadable."""
+        ...
+
+    def distinct_count(self, table: str, column: str) -> int:
+        """Distinct NON-NULL values in column. Raises WarehouseError when unreadable."""
+        ...

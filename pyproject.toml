@@ -23,6 +23,7 @@ dev = [
     "pytest",
     "import-linter",
     "types-PyYAML",
+    "dbt-duckdb>=1.10,<1.11",
 ]
 
 [tool.setuptools.packages.find]
