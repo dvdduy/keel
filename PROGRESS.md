@@ -303,3 +303,28 @@
 
 "Keel owns the pipeline DAG, but dbt owns the SQL model DAG. A single Keel transform step materializes the requested mart and its upstream dbt models, while Keel still captures per-model status and rolls back every relation built by that step."
 
+
+## Day 15 — dbt test gates + manifest capture
+
+* Date: 2026-07-08
+* Done:
+
+  * Added dbt test execution as a separate `TransformRunner.test()` port method, keeping transform success distinct from data-contract success.
+  * Added `TestStatus`, `TestResult`, and `TestReport` so dbt test statuses are modeled separately from dbt model statuses.
+  * Enforced dbt tests as a transform-layer gate: `fail` and `error` fail closed; `pass`, `skipped`, and `warn` are non-blocking by default.
+  * Wired the DuckDB step handler to run `dbt run` followed by `dbt test` for selected models.
+  * On dbt test failure, the just-materialized model output is dropped before the transform step fails, preventing unvalidated tables from being left behind.
+  * Added manifest capture via `TransformRunner.capture_manifest()`, parsing dbt `manifest.json` into Keel-owned `ManifestNode` / `TransformManifest` value objects.
+  * Manifest parsing includes both dbt model nodes and source nodes, with `depends_on.nodes` edges preserved for future lineage work.
+  * Added passing, failing, warning-severity, tool-failure, manifest, and executor cleanup tests.
+
+### Design decisions
+
+* dbt tests are treated as SQL-model-layer contracts enforced during transform.
+* `severity: warn` is non-blocking by default because dbt intentionally distinguishes warning tests from error-level gates.
+* Keel’s later quality-gate layer will provide the stricter quarantine surface at layer boundaries; Day 15 uses drop-on-fail as the temporary fail-closed behavior.
+* Manifest parsing stays adapter-side so dbt artifact schema knowledge does not leak into `src/` inner layers.
+
+### Talking point banked
+
+"I separated dbt run telemetry from dbt test gates and manifest metadata: model execution, data-contract validation, and lineage metadata are three different surfaces, each crossing the transform port as Keel-owned value objects."

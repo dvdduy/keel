@@ -6,15 +6,20 @@ from pathlib import Path
 
 from keel.application.execution.plan import IngestStep, PlanStep, TransformStep
 from keel.application.ports.step_handler import Compensation
-from keel.application.ports.transform import ModelResult, ModelStatus, TransformRunner
+from keel.application.ports.transform import (
+    ModelResult,
+    ModelStatus,
+    TestReport,
+    TestStatus,
+    TransformRunner,
+)
 from keel.application.ports.warehouse import WarehouseAdapter
-
 
 WarehouseFactory = Callable[[], WarehouseAdapter]
 
 
 class TransformStepFailed(RuntimeError):
-    """Raised when a transform model produced an interpretable failed result."""
+    """Raised when a transform step produced an interpretable failed result."""
 
 
 @dataclass
@@ -41,12 +46,19 @@ class DuckDbStepHandler:
         return lambda: self._drop_relation(step.destination)
 
     def _run_transform(self, step: TransformStep) -> Compensation:
-        result = self.transform_runner.run(f"+{step.model}")
+        select = f"+{step.model}"
 
+        result = self.transform_runner.run(select)
         if not result.ok:
             raise TransformStepFailed(_format_transform_failure(result.models))
 
         materialized_models = result.models
+
+        test_report = self.transform_runner.test(select)
+        if not test_report.ok:
+            self._drop_materialized_models(materialized_models)
+            raise TransformStepFailed(_format_test_failure(test_report))
+
         return lambda: self._drop_materialized_models(materialized_models)
 
     def _drop_materialized_models(self, models: tuple[ModelResult, ...]) -> None:
@@ -63,7 +75,6 @@ class DuckDbStepHandler:
 
 def _format_transform_failure(models: tuple[ModelResult, ...]) -> str:
     failed = [model for model in models if model.status in {ModelStatus.ERROR, ModelStatus.SKIPPED}]
-
     if not failed:
         return "transform step failed"
 
@@ -72,3 +83,16 @@ def _format_transform_failure(models: tuple[ModelResult, ...]) -> str:
         for model in failed
     )
     return f"transform step failed: {details}"
+
+
+def _format_test_failure(report: TestReport) -> str:
+    failed = [test for test in report.tests if test.status in {TestStatus.FAIL, TestStatus.ERROR}]
+    if not failed:
+        return "transform test gate failed"
+
+    details = ", ".join(
+        f"{test.test}={test.status.value} failures={test.failures}"
+        + (f" ({test.message})" if test.message else "")
+        for test in failed
+    )
+    return f"transform test gate failed: {details}"

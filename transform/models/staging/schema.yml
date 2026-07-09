@@ -1,0 +1,26 @@
+version: 2
+
+models:
+  - name: stg_orders
+    columns:
+      - name: order_id
+        tests:
+          - not_null
+          - unique
+      - name: customer_id
+        tests:
+          - not_null
+
+  - name: stg_orders_bad_unique
+    columns:
+      - name: customer_id
+        tests:
+          - unique
+
+  - name: stg_orders_warn_unique
+    columns:
+      - name: customer_id
+        tests:
+          - unique:
+              config:
+                severity: warn
