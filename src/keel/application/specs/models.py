@@ -63,6 +63,22 @@ class ContractColumn(StrictModel):
 
 class FreshnessSpec(StrictModel):
     max_age_minutes: int = Field(gt=0)
+    event_time_column: str | None = None
+
+    @field_validator("event_time_column")
+    @classmethod
+    def event_time_column_must_be_identifier_or_none(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        value = value.strip()
+        if not _IDENTIFIER_RE.match(value):
+            raise ValueError(
+                "freshness.event_time_column must be a valid identifier, "
+                "for example: order_created_at"
+            )
+
+        return value
 
 
 class QualityCheckSpec(StrictModel):
@@ -142,9 +158,25 @@ class PipelineSpec(StrictModel):
     def validate_contract_references(self) -> Self:
         contract_column_names = [column.name for column in self.contract]
         unique_column_names = set(contract_column_names)
+        contract_column_types = {column.name: column.type for column in self.contract}
 
         if len(contract_column_names) != len(unique_column_names):
             raise ValueError("contract column names must be unique")
+
+        if self.freshness.event_time_column is not None:
+            event_time_column = self.freshness.event_time_column
+
+            if event_time_column not in unique_column_names:
+                raise ValueError(
+                    f"freshness event_time_column references unknown column: "
+                    f"{event_time_column}"
+                )
+
+            if contract_column_types[event_time_column] != ColumnType.TIMESTAMP:
+                raise ValueError(
+                    f"freshness event_time_column must reference a timestamp column: "
+                    f"{event_time_column}"
+                )
 
         for check in self.quality_checks:
             if check.column not in unique_column_names:

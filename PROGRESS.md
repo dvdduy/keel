@@ -338,5 +338,14 @@
   - Covered boundary and failure-path behavior: exact threshold is fresh, missing `as_of` is unknown, future `as_of` is unknown, and naive datetimes fail loudly.
   - Documented the future spec-hash implication of adding `event_time_column`.
 
+### Checkpoint 2 — Event-time freshness wiring
+- Done:
+  - Extended `FreshnessSpec` with optional `event_time_column`.
+  - Validated that declared event-time columns exist in the contract and use timestamp type.
+  - Added `WarehouseAdapter.max_timestamp(table, column) -> datetime | None`.
+  - Implemented DuckDB `MAX(timestamp_column)` resolution with timezone-aware UTC output and boundary error wrapping.
+  - Added `resolve_as_of` policy: event-time watermark first, latest successful run `finished_at` fallback when no event-time column is declared.
+  - Documented the Day 6 canonical-hash implication: adding `event_time_column: null` is an acceptable one-time DSL schema migration.
+
 ### Talking point banked
-"Freshness measures the age of the newest fact, not merely the age of the last successful load. Event-time watermarks catch silent upstream stalls that wall-clock liveness checks miss, while wall-clock remains an explicit weaker fallback for sources without usable event time."
+"Freshness is resolved in two layers: a policy layer chooses the as-of clock, then a pure evaluator applies the threshold. That separation lets Keel support event-time freshness, wall-clock fallback, and future business-calendar modifiers without rewriting the freshness arithmetic."

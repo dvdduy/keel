@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Protocol
+from datetime import datetime
 
 from keel.application.reconcile.drift import ObservedSchema
 
@@ -29,4 +30,12 @@ class WarehouseAdapter(Protocol):
 
     def close(self) -> None:
         """Release any held warehouse resources."""
+        ...
+
+    def max_timestamp(self, table: str, column: str) -> datetime | None:
+        """Return MAX(column) from table as a timezone-aware datetime.
+
+        Returns None when the table is empty or all values are NULL.
+        Raises WarehouseError when the table/column/type cannot be translated.
+        """
         ...
