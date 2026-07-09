@@ -328,3 +328,15 @@
 ### Talking point banked
 
 "I separated dbt run telemetry from dbt test gates and manifest metadata: model execution, data-contract validation, and lineage metadata are three different surfaces, each crossing the transform port as Keel-owned value objects."
+
+## Day 16 — Freshness clock ADR + pure evaluator
+- Date: 2026-07-08
+- Done:
+  - Added ADR 0001 deciding Keel's freshness clock model: event-time watermark primary, wall-clock latest-successful-load fallback, business calendar deferred as a modifier.
+  - Added pure freshness evaluator with `FRESH`, `STALE`, and `UNKNOWN` outcomes.
+  - Made freshness arithmetic source-agnostic: the caller resolves `as_of`; the evaluator only judges age against the threshold.
+  - Covered boundary and failure-path behavior: exact threshold is fresh, missing `as_of` is unknown, future `as_of` is unknown, and naive datetimes fail loudly.
+  - Documented the future spec-hash implication of adding `event_time_column`.
+
+### Talking point banked
+"Freshness measures the age of the newest fact, not merely the age of the last successful load. Event-time watermarks catch silent upstream stalls that wall-clock liveness checks miss, while wall-clock remains an explicit weaker fallback for sources without usable event time."
