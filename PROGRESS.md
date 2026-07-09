@@ -408,3 +408,24 @@
 
 ### Talking point banked
 "Quality is the complete, queryable output of every run — the gate evaluates and records every check, not just the first failure. I decoupled execution topology, one gate node per layer, from audit granularity, per-check verdict rows, so on-call sees the whole picture in one run instead of peeling failures off one re-run at a time — and it is exhaustive and fail-closed at once."
+ 
+## Day 20 — Dataset registry / catalog
+- Date: 2026-07-09
+- Done:
+  - Added an immutable `CatalogEntry` application model projected from an authoritative `SpecVersion`.
+  - Keyed datasets by their consumer-facing destination (`schema.table`), with pipeline identity retained as producer metadata.
+  - Denormalized owner, team, and contract columns into a queryable schema snapshot with source-spec provenance.
+  - Added the `DatasetCatalog` port and an in-memory fake covering idempotent upsert, lookup, and listing behavior.
+  - Added PostgreSQL persistence using a natural dataset primary key and JSONB contract columns.
+  - Added ORM translators, `SqlAlchemyDatasetCatalog`, and an Alembic migration for the `datasets` table.
+  - Wired catalog projection into `SubmitSpec` on every successful submit, including unchanged submissions, so missed catalog writes self-heal from the current spec head.
+  - Added unit and integration coverage for projection, provenance, ownership updates, schema mapping, and one-row upsert semantics.
+  - Verified formatting, lint, mypy, import-layer contracts, migration application, and all 195 tests.
+
+### Design decisions
+- The catalog is a rebuildable read model, not a second source of truth; identity, ownership, and schema always derive from the authoritative spec head.
+- Destination is the dataset identity because it is the physical, consumer-facing product name; pipeline name is producer metadata.
+- Re-projecting on every successful submit is deliberately idempotent and self-healing. A later destination-conflict policy can replace today's last-write-wins behavior.
+
+### Talking point banked
+"Datasets are products in a catalog keyed by their consumer-facing name, but the catalog is a projection of the authoritative spec head rather than a hand-maintained registry. Ownership and schema therefore cannot drift from what is declared: the view is queryable, denormalized, and rebuildable from source."

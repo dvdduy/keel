@@ -13,6 +13,7 @@ from sqlalchemy import (
     Text,
     false,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from keel.domain.run import RunStatus
 from keel.application.quality.checks import CheckStatus
@@ -104,3 +105,16 @@ class QualityResultRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (Index("ix_quality_results_run_id", "run_id"),)
+
+
+class DatasetRecord(Base):
+    __tablename__ = "datasets"
+
+    dataset: Mapped[str] = mapped_column(String, primary_key=True)
+    pipeline_id: Mapped[UUID] = mapped_column(ForeignKey("pipelines.id"))
+    pipeline_name: Mapped[str] = mapped_column(String)
+    team: Mapped[str] = mapped_column(String)
+    owner: Mapped[str] = mapped_column(String)
+    columns: Mapped[list[dict[str, object]]] = mapped_column(JSONB)
+    source_spec_id: Mapped[str] = mapped_column(String(64))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

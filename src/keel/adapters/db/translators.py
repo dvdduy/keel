@@ -2,6 +2,9 @@ from keel.domain.run import Run, RunStep
 from keel.adapters.db.models import RunRecord, RunStepRecord
 from keel.adapters.db.models import QualityResultRecord
 from keel.application.quality.results import QualityResult
+from keel.adapters.db.models import DatasetRecord
+from keel.application.catalog.entry import CatalogEntry
+from keel.application.specs.models import ContractColumn
 
 
 def run_to_record(run: Run) -> RunRecord:
@@ -73,4 +76,30 @@ def record_to_quality_result(record: QualityResultRecord) -> QualityResult:
         violations=record.violations,
         detail=record.detail,
         created_at=record.created_at,
+    )
+
+
+def catalog_entry_to_record(entry: CatalogEntry) -> DatasetRecord:
+    return DatasetRecord(
+        dataset=entry.dataset,
+        pipeline_id=entry.pipeline_id,
+        pipeline_name=entry.pipeline_name,
+        team=entry.team,
+        owner=entry.owner,
+        columns=[column.model_dump(mode="json") for column in entry.columns],
+        source_spec_id=entry.source_spec_id,
+        updated_at=entry.updated_at,
+    )
+
+
+def record_to_catalog_entry(record: DatasetRecord) -> CatalogEntry:
+    return CatalogEntry(
+        dataset=record.dataset,
+        pipeline_id=record.pipeline_id,
+        pipeline_name=record.pipeline_name,
+        team=record.team,
+        owner=record.owner,
+        columns=tuple(ContractColumn.model_validate(column) for column in record.columns),
+        source_spec_id=record.source_spec_id,
+        updated_at=record.updated_at,
     )
