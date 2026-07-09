@@ -429,3 +429,21 @@
 
 ### Talking point banked
 "Datasets are products in a catalog keyed by their consumer-facing name, but the catalog is a projection of the authoritative spec head rather than a hand-maintained registry. Ownership and schema therefore cannot drift from what is declared: the view is queryable, denormalized, and rebuildable from source."
+
+## Day 21 — Declared-and-verified lineage
+- Date: 2026-07-09
+- Done:
+  - Added ADR 0002 selecting declared-and-verified table-level lineage.
+  - Added immutable, hashable `LineageEdge` values and a pure `declared_edges` projection.
+  - Represented external CSV nodes as `source:csv:<path>` so they cannot be confused with datasets.
+  - Modeled transformed pipelines according to actual materialization: external source → raw destination → `main.<transform>`.
+  - Added `edges_for_version` so lineage projects from the same authoritative spec heads as the catalog.
+  - Documented the catalog/lineage identity conflict for transformed pipelines as a required reconciliation.
+
+### Design decisions
+- The spec is producer intent and therefore the lineage authority; the dbt manifest is an observation used to verify that intent.
+- SQL parsing is deferred to column-level lineage or non-dbt SQL, where it adds information instead of duplicating dbt's Jinja and `ref()` resolution.
+- An explicit cross-pipeline upstream field is deferred to avoid canonical-hash churn before the DSL can use it.
+
+### Talking point banked
+"I chose declared-and-verified lineage: the spec declares table-level edges as producer intent and the dbt manifest verifies them, rather than parsing SQL — because parsing gives me actual state with nothing to reconcile against, and re-parsing raw model SQL with sqlglot re-solves, worse, the Jinja/ref resolution dbt already did correctly in its manifest."
