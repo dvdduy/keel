@@ -470,3 +470,27 @@
 
 ### Talking point banked
 "Impact analysis is graph reachability, but the important production detail is termination. Even if lineage should be a DAG, specs are independently authored inputs, so the traversal treats cycles and self-loops as valid data it must survive. I seed `visited` with the origin, then BFS outward; that gives a strictly downstream casualty set where the changed node is the cause, not part of the answer."
+
+## Day 23 - Manifest-verified lineage drift
+- Date: 2026-07-09
+- Done:
+  - Extended captured dbt manifest nodes with physical identity: dbt `schema` plus model `alias` or source `identifier`, falling back to node name.
+  - Added a pure lineage verifier that projects dbt `depends_on.nodes` into Keel `LineageEdge` values before diffing declared intent against observed manifest state.
+  - Rejects corrupt manifests whose dependency list references an unknown unique id.
+  - Scopes verification to dbt jurisdiction: Keel ingestion edges whose upstream starts with `source:` are reported as out of scope, not missing.
+  - Scopes observed drift to the governed frontier: only manifest edges terminating at nodes named by the spec are considered, so unrelated dbt project models do not become false undeclared drift.
+  - Classifies disagreement as `missing` for declared in-scope edges absent from dbt and `undeclared` for observed dependencies into governed nodes that the spec did not declare.
+  - Covered projection, corrupt manifests, verified edges, missing edges, out-of-scope ingestion, unrelated manifest edges, swapped sources, and `ok` semantics.
+  - Verified `ruff`, `black --check`, `mypy`, all 219 tests, and import-linter.
+
+### Design decisions
+- Verification compares one vocabulary: both declared and observed edges are normalized to physical `schema.table` identities before diffing.
+- dbt is treated as an oracle with partial jurisdiction, not a universal lineage authority; ingestion edges remain Keel-owned.
+- The verifier stays dependency-clean inside `application.lineage`, importing only lineage edges and the transform manifest contract.
+
+### Deferred seams
+- Use-case wiring that captures the manifest through `TransformRunner` and compares it with the authoritative spec head is still a stretch item.
+- The catalog/lineage identity wrinkle from ADR 0002 remains explicitly deferred; Day 23 verifies table-level lineage and does not redefine dataset catalog identity.
+
+### Talking point banked
+"Declared lineage is verified against the dbt manifest, but the work is in the scoping, not the diff. I translate dbt's source/ref graph into the platform's physical-table vocabulary so both sides speak one language, then diff only within the frontier the spec governs - so an unrelated model in the same dbt project isn't false drift, and my CSV ingestion edge isn't flagged as missing just because dbt can't see it. A swapped upstream then reads as exactly one missing edge and one undeclared edge: desired-vs-actual, scoped to the oracle's jurisdiction."

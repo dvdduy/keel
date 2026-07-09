@@ -196,8 +196,27 @@ def _to_manifest_node(unique_id: str, raw_node: object) -> ManifestNode:
         unique_id=unique_id,
         resource_type=_required_string(item, "resource_type", "manifest.json node"),
         name=_required_string(item, "name", "manifest.json node"),
+        schema=_required_string(item, "schema", "manifest.json node"),
+        relation=_relation_name(item),
         depends_on=_depends_on_nodes(item.get("depends_on")),
     )
+
+
+def _relation_name(item: Mapping[str, object]) -> str:
+    resource_type = _required_string(item, "resource_type", "manifest.json node")
+
+    if resource_type == "source":
+        identifier = _optional_string(item, "identifier")
+        if identifier is not None:
+            return identifier
+
+        return _required_string(item, "name", "manifest.json node")
+
+    alias = _optional_string(item, "alias")
+    if alias is not None:
+        return alias
+
+    return _required_string(item, "name", "manifest.json node")
 
 
 def _depends_on_nodes(raw_depends_on: object) -> frozenset[str]:

@@ -59,7 +59,13 @@ class ManifestNode:
     unique_id: str
     resource_type: str
     name: str
+    schema: str
+    relation: str
     depends_on: frozenset[str]
+
+    @property
+    def physical_identity(self) -> str:
+        return f"{self.schema}.{self.relation}"
 
 
 @dataclass(frozen=True)

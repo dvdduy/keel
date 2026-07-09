@@ -174,8 +174,13 @@ def test_capture_manifest_returns_model_and_source_nodes(tmp_path):
 
     manifest = runner.capture_manifest()
 
-    assert _manifest_node(manifest.nodes, resource_type="model", name="stg_orders") is not None
-    assert _manifest_node(manifest.nodes, resource_type="source", name="orders") is not None
+    stg_orders = _manifest_node(manifest.nodes, resource_type="model", name="stg_orders")
+    orders_source = _manifest_node(manifest.nodes, resource_type="source", name="orders")
+
+    assert stg_orders is not None
+    assert stg_orders.physical_identity == "main.stg_orders"
+    assert orders_source is not None
+    assert orders_source.physical_identity == "raw.orders"
 
 
 def test_capture_manifest_includes_depends_on_edges(tmp_path):
