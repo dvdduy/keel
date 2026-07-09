@@ -21,7 +21,10 @@ class SpecParseError(SpecError):
 def parse_pipeline_spec_yaml(content: str) -> PipelineSpec:
     """Parse a pipeline spec from YAML text."""
 
-    raw_spec = yaml.safe_load(content)
+    try:
+        raw_spec = yaml.safe_load(content)
+    except yaml.YAMLError as err:
+        raise SpecParseError("pipeline spec YAML is malformed") from err
 
     if raw_spec is None:
         raise SpecParseError("pipeline spec YAML is empty")
