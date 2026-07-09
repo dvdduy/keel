@@ -1,5 +1,7 @@
 from keel.domain.run import Run, RunStep
 from keel.adapters.db.models import RunRecord, RunStepRecord
+from keel.adapters.db.models import QualityResultRecord
+from keel.application.quality.results import QualityResult
 
 
 def run_to_record(run: Run) -> RunRecord:
@@ -45,4 +47,30 @@ def record_to_run(record: RunRecord) -> Run:
             for s in record.steps
         ],
         watermark=record.watermark,
+    )
+
+
+def quality_result_to_record(result: QualityResult) -> QualityResultRecord:
+    return QualityResultRecord(
+        id=result.id,
+        run_id=result.run_id,
+        check_type=result.check_type,
+        column=result.column,
+        status=result.status,
+        violations=result.violations,
+        detail=result.detail,
+        created_at=result.created_at,
+    )
+
+
+def record_to_quality_result(record: QualityResultRecord) -> QualityResult:
+    return QualityResult(
+        id=record.id,
+        run_id=record.run_id,
+        check_type=record.check_type,
+        column=record.column,
+        status=record.status,
+        violations=record.violations,
+        detail=record.detail,
+        created_at=record.created_at,
     )

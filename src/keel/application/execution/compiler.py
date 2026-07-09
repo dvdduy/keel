@@ -38,6 +38,9 @@ def compile_plan(spec: PipelineSpec) -> ExecutionPlan:
                 depends_on=frozenset({last_data_step_key}),
                 check=check.type,
                 column=check.column,
+                table=(
+                    f"main.{spec.transform}" if spec.transform is not None else spec.destination
+                ),
             )
         )
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from keel.adapters.executor.local import LocalExecutor
 from keel.application.execution.plan import (
@@ -34,7 +34,7 @@ class RecordingStepHandler:
     calls: list[str] = field(default_factory=list)
     undo_calls: list[str] = field(default_factory=list)
 
-    def run(self, step: PlanStep) -> Compensation:
+    def run(self, step: PlanStep, *, run_id: UUID) -> Compensation:
         self.calls.append(step.key)
 
         if step.key == self.fail_on:
@@ -68,6 +68,7 @@ def _plan() -> ExecutionPlan:
                 depends_on=frozenset({"transform"}),
                 check=QualityCheckType.NOT_NULL,
                 column="order_id",
+                table="main.stg_orders",
             ),
             TransformStep(
                 key="transform",

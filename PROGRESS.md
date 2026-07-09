@@ -363,3 +363,31 @@
 
 ### Talking point banked
 "I classified quality checks by the state each one needs to judge — single-snapshot column predicates, cross-table relational checks, and stateful historical checks. I built the self-contained class on the same measure-facts-then-judge seam as freshness, so the evaluator is pure, warehouse-free, and testable. Referential integrity is deferred until the DSL can declare foreign keys; volume anomaly is deferred until Keel stores a historical baseline."
+
+
+## Day 18 — Quality gates and quarantine
+
+* Date: 2026-07-08
+* Done:
+
+  * Added fail-closed gate policy: PASSED proceeds, FAILED blocks, and UNKNOWN blocks because an unobservable just-materialized relation is unsafe.
+  * Added `QualityResult` audit shape plus repository port.
+  * Implemented `apply_gate`: always records the check result first, then returns PROCEED/BLOCK.
+  * Threaded run context into step execution so quality results are tied to a run.
+  * Wired quality steps into the DuckDB handler: measure column, evaluate check, persist result, and raise on block.
+  * Reused Saga rollback for quarantine: blocking gates unwind upstream materialization so bad data does not reach the serving relation.
+  * Persisted/queryable quality results and integration tests proving both failed quarantine and clean-data proceed paths.
+  * All focused tests and `make check` green.
+
+### Design decisions
+
+* UNKNOWN is fail-closed: if the table/column cannot be measured at gate time, Keel blocks rather than letting potentially bad data through.
+* Quality-result audit durability is independent of run success: the failed relation is rolled back, but the evidence of why the run failed survives.
+
+### Known limitation
+
+* Current per-check quality steps fail fast, so only the first blocking check is recorded before rollback. Production hardening would use one exhaustive gate boundary: evaluate all checks, persist all results, then block if any failed.
+
+### Talking point banked
+
+"Bad data is quarantined at the gate, not propagated. A quality check is a monitor that's allowed to say no: it always records a quality_result audit row, then returns a block/proceed decision. Blocking reuses my Saga rollback — the just-materialized relation is compensated away, so nothing reaches serving — while the audit row survives the rollback, because 'the run failed' and 'here's exactly which check failed and by how much' are separate durability guarantees. And it fails closed: even a check I couldn't run blocks, rather than waving data through."

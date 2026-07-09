@@ -37,6 +37,7 @@ class QualityStep:
     depends_on: frozenset[str]
     check: QualityCheckType
     column: str
+    table: str
 
 
 PlanStep = IngestStep | TransformStep | QualityStep

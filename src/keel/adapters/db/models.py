@@ -15,6 +15,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from keel.domain.run import RunStatus
+from keel.application.quality.checks import CheckStatus
+from keel.application.specs.models import QualityCheckType
 
 
 class Base(DeclarativeBase): ...
@@ -85,3 +87,20 @@ class SpecVersionRecord(Base):
             name="uq_spec_versions_pipeline_parent",
         ),
     )
+
+
+class QualityResultRecord(Base):
+    __tablename__ = "quality_results"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    run_id: Mapped[UUID] = mapped_column(ForeignKey("runs.id"))
+    check_type: Mapped[QualityCheckType] = mapped_column(
+        SAEnum(QualityCheckType, name="qualitychecktype")
+    )
+    column: Mapped[str] = mapped_column(String)
+    status: Mapped[CheckStatus] = mapped_column(SAEnum(CheckStatus, name="checkstatus"))
+    violations: Mapped[int | None] = mapped_column(nullable=True)
+    detail: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_quality_results_run_id", "run_id"),)

@@ -250,6 +250,7 @@ def test_transform_rollback_drops_all_materialized_models(tmp_path) -> None:
                 depends_on=frozenset({"transform"}),
                 check=QualityCheckType.NOT_NULL,
                 column="order_id",
+                table="main.stg_orders",
             ),
         )
     )

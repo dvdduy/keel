@@ -25,6 +25,7 @@ def test_linear_plan_orders_ingest_transform_quality() -> None:
                 depends_on=frozenset({"transform"}),
                 check=QualityCheckType.NOT_NULL,
                 column="order_id",
+                table="main.stg_orders",
             ),
             TransformStep(
                 key="transform",
@@ -55,6 +56,7 @@ def test_fanout_quality_steps_ordered_after_last_data_step() -> None:
                 depends_on=frozenset({"transform"}),
                 check=QualityCheckType.UNIQUE,
                 column="order_id",
+                table="main.stg_orders",
             ),
             IngestStep(
                 key="ingest",
@@ -67,6 +69,7 @@ def test_fanout_quality_steps_ordered_after_last_data_step() -> None:
                 depends_on=frozenset({"transform"}),
                 check=QualityCheckType.NOT_NULL,
                 column="customer_id",
+                table="main.stg_orders",
             ),
             TransformStep(
                 key="transform",
@@ -92,12 +95,14 @@ def test_ready_steps_broken_by_key_ascending() -> None:
                 depends_on=frozenset({"ingest"}),
                 check=QualityCheckType.NOT_NULL,
                 column="z",
+                table="main.stg_orders",
             ),
             QualityStep(
                 key="quality:a",
                 depends_on=frozenset({"ingest"}),
                 check=QualityCheckType.NOT_NULL,
                 column="a",
+                table="main.stg_orders",
             ),
             IngestStep(
                 key="ingest",
@@ -134,6 +139,7 @@ def test_cycle_raises_plan_validation_error() -> None:
                 depends_on=frozenset({"b"}),
                 check=QualityCheckType.NOT_NULL,
                 column="order_id",
+                table="main.stg_orders",
             ),
         )
     )
