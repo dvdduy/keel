@@ -613,7 +613,7 @@
 ### Talking point banked
 "The CLI is a thin client over the same control-plane API humans and CI use - not a second in-process entrypoint - so the compatibility gate and error contract cannot be bypassed by picking a different door. import-linter cannot enforce that boundary, which is exactly why it is a deliberate design decision I can defend."
 
-## Day 31 - Read-only MCP agent surface
+## Day 30 - Read-only MCP agent surface
 - Date: 2026-07-09
 - Done:
   - Added `src/keel/entrypoints/mcp_server.py` as a FastMCP driving adapter over the HTTP control plane.
@@ -631,3 +631,25 @@
 
 ### Talking point banked
 "The agent's entire tool surface is read-only by construction: the tools reach the control plane through a client that has no write verb, so no prompt injection or agent error can mutate Keel through this seam. It is a property of the type, tested in CI, not a policy I hope holds. And it is the same HTTP door humans and CI use, so when write tools land they inherit the compatibility gate instead of routing around it."
+
+## Day 31 - LangGraph context-gathering agent spine
+- Date: 2026-07-09
+- Done:
+  - Added a pure incident-agent context assembler in `application.agent`.
+  - Defined the `PlatformReader` read port plus Keel-owned `DatasetOwner`, `RunView`, and `IncidentDossier` value objects.
+  - Implemented `assemble_dossier(...)` as deterministic orchestration over the read port: live lineage impact, catalog owner fan-out, optional failing run, current spec head, impact drift, and explicit evidence gaps.
+  - Recorded unavailable read surfaces honestly in the dossier: schema diffs, correlated changes, and recent run listing remain gaps until the control plane exposes read endpoints for them.
+  - Moved `ReadOnlyControlPlane` from the MCP entrypoint into `adapters.control_plane` so MCP and the agent reader share one GET-only client without inverting layers.
+  - Added `HttpPlatformReader` over the read-only control plane, mapping API JSON into application-owned read models and returning `None` for 404 optional reads.
+  - Added a LangGraph adapter spine with typed state, a real gather node, and an explicit Day 32 reasoning stub.
+  - Added `langgraph==1.2.8` as a runtime dependency with a scoped mypy override.
+  - Covered the pure assembler, HTTP reader, and graph spine with focused tests.
+
+### Design decisions
+- Context assembly is the testable half of the agent. It is pure application orchestration over an injected read port, not LLM-driven tool selection.
+- LangGraph is treated as an adapter framework. The application layer knows nothing about it; import-linter keeps the framework at the edge.
+- The dossier compares incident snapshot impact to live lineage impact. A mismatch surfaces lineage drift since the incident opened instead of hiding the difference.
+- Missing catalog/run/spec evidence becomes a gap in the dossier, not an exception. Triage should fail closed with an honest record of what could not be gathered.
+
+### Talking point banked
+"The agent is deterministic before it is intelligent: the gather step follows a fixed read-only runbook into a typed dossier, and only the next node is reserved for LLM reasoning. That means Day 34 can eval the valuable part without a model, while LangGraph still gives us the state topology Days 32 and 33 can grow."

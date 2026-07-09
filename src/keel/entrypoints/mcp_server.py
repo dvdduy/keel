@@ -7,6 +7,7 @@ from uuid import UUID
 import httpx
 from mcp.server.fastmcp import FastMCP
 
+from keel.adapters.control_plane.read_only_client import ReadOnlyControlPlane
 from keel.entrypoints.cli import get_base_url
 
 
@@ -15,25 +16,6 @@ JsonValue = dict[str, Any] | list[Any] | str | int | float | bool | None
 
 class ClientFactory(Protocol):
     def __call__(self, base_url: str) -> httpx.AsyncClient: ...
-
-
-class ReadOnlyControlPlane:
-    """A control-plane client that can only read.
-
-    There is deliberately no write verb here, so no tool built on it
-    can mutate Keel state -- safety by construction, not by convention.
-    """
-
-    def __init__(self, client: httpx.AsyncClient) -> None:
-        self._client = client
-
-    async def get(
-        self,
-        path: str,
-        *,
-        params: Mapping[str, Any] | None = None,
-    ) -> httpx.Response:
-        return await self._client.get(path, params=params)
 
 
 def _default_client_factory(base_url: str) -> httpx.AsyncClient:
