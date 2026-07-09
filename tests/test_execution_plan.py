@@ -7,7 +7,7 @@ from keel.application.execution.plan import (
     ExecutionPlan,
     IngestStep,
     PlanValidationError,
-    QualityStep,
+    QualityGateStep,
     TransformStep,
 )
 from keel.application.specs.models import (
@@ -89,7 +89,7 @@ def test_quality_checks_depend_on_ingest_without_transform() -> None:
     plan = compile_plan(spec)
 
     step = plan.steps[1]
-    assert isinstance(step, QualityStep)
+    assert isinstance(step, QualityGateStep)
     assert step.depends_on == frozenset({"ingest"})
 
 
@@ -102,39 +102,8 @@ def test_quality_checks_depend_on_transform_when_present() -> None:
     plan = compile_plan(spec)
 
     step = plan.steps[2]
-    assert isinstance(step, QualityStep)
+    assert isinstance(step, QualityGateStep)
     assert step.depends_on == frozenset({"transform"})
-
-
-def test_quality_step_carries_check_type_and_column() -> None:
-    spec = make_spec(
-        quality_checks=[QualityCheckSpec(type=QualityCheckType.NOT_NULL, column="order_id")]
-    )
-
-    plan = compile_plan(spec)
-
-    step = plan.steps[1]
-    assert isinstance(step, QualityStep)
-    assert step.key == "quality:not_null:order_id"
-    assert step.check == QualityCheckType.NOT_NULL
-    assert step.column == "order_id"
-
-
-def test_plan_preserves_quality_check_order() -> None:
-    spec = make_spec(
-        quality_checks=[
-            QualityCheckSpec(type=QualityCheckType.NOT_NULL, column="order_id"),
-            QualityCheckSpec(type=QualityCheckType.NOT_NULL, column="customer_id"),
-        ]
-    )
-
-    plan = compile_plan(spec)
-
-    assert [step.key for step in plan.steps] == [
-        "ingest",
-        "quality:not_null:order_id",
-        "quality:not_null:customer_id",
-    ]
 
 
 def test_compilation_is_deterministic() -> None:
@@ -177,3 +146,54 @@ def test_plan_rejects_duplicate_step_keys() -> None:
                 ),
             )
         )
+
+
+def test_compiler_emits_one_quality_gate_for_multiple_checks() -> None:
+    spec = make_spec(
+        quality_checks=[
+            QualityCheckSpec(type=QualityCheckType.NOT_NULL, column="order_id"),
+            QualityCheckSpec(type=QualityCheckType.NOT_NULL, column="customer_id"),
+        ]
+    )
+
+    plan = compile_plan(spec)
+
+    quality_steps = [step for step in plan.steps if isinstance(step, QualityGateStep)]
+
+    assert len(quality_steps) == 1
+    assert quality_steps[0].key == "quality"
+    assert quality_steps[0].depends_on == frozenset({"ingest"})
+    assert quality_steps[0].table == "raw.orders"
+    assert quality_steps[0].checks == spec.quality_checks
+
+
+def test_quality_gate_carries_table_and_checks() -> None:
+    checks = [
+        QualityCheckSpec(type=QualityCheckType.NOT_NULL, column="order_id"),
+    ]
+    spec = make_spec(quality_checks=checks)
+
+    plan = compile_plan(spec)
+
+    step = plan.steps[1]
+
+    assert isinstance(step, QualityGateStep)
+    assert step.key == "quality"
+    assert step.table == "raw.orders"
+    assert step.checks == tuple(checks)
+
+
+def test_plan_preserves_quality_check_order_inside_gate() -> None:
+    checks = [
+        QualityCheckSpec(type=QualityCheckType.NOT_NULL, column="order_id"),
+        QualityCheckSpec(type=QualityCheckType.NOT_NULL, column="customer_id"),
+    ]
+    spec = make_spec(quality_checks=checks)
+
+    plan = compile_plan(spec)
+
+    assert [step.key for step in plan.steps] == ["ingest", "quality"]
+
+    step = plan.steps[1]
+    assert isinstance(step, QualityGateStep)
+    assert step.checks == tuple(checks)

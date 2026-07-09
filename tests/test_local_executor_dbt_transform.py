@@ -17,10 +17,10 @@ from keel.adapters.executor.duckdb_step_handler import (
 from keel.application.execution.plan import (
     ExecutionPlan,
     IngestStep,
-    QualityStep,
+    QualityGateStep,
     TransformStep,
 )
-from keel.application.specs.models import QualityCheckType
+from keel.application.specs.models import QualityCheckSpec, QualityCheckType
 from keel.application.ports.transform import (
     ModelResult,
     ModelStatus,
@@ -245,12 +245,16 @@ def test_transform_rollback_drops_all_materialized_models(tmp_path) -> None:
                 depends_on=frozenset({"ingest"}),
                 model="mart_customer_orders",
             ),
-            QualityStep(
-                key="quality:not_null:order_id",
+            QualityGateStep(
+                key="quality",
                 depends_on=frozenset({"transform"}),
-                check=QualityCheckType.NOT_NULL,
-                column="order_id",
-                table="main.stg_orders",
+                table="main.mart_customer_orders",
+                checks=(
+                    QualityCheckSpec(
+                        type=QualityCheckType.NOT_NULL,
+                        column="order_id",
+                    ),
+                ),
             ),
         )
     )
@@ -261,7 +265,7 @@ def test_transform_rollback_drops_all_materialized_models(tmp_path) -> None:
     assert [step.name for step in run.steps] == [
         "ingest",
         "transform",
-        "quality:not_null:order_id",
+        "quality",
     ]
     assert [step.status for step in run.steps] == [
         RunStatus.SUCCESS,
@@ -299,11 +303,12 @@ def test_marts_model_failure_is_a_failed_step_with_model_detail(tmp_path) -> Non
 
     with pytest.raises(TransformStepFailed) as exc:
         handler.run(
-            TransformStep(
+            run_id=uuid4(),
+            step=TransformStep(
                 key="transform",
                 depends_on=frozenset(),
                 model="broken_mart_customer_orders",
-            )
+            ),
         )
 
     assert "broken_mart_customer_orders" in str(exc.value)
@@ -386,11 +391,12 @@ def test_transform_step_drops_materialization_on_test_failure(tmp_path) -> None:
 
     with pytest.raises(TransformStepFailed) as exc:
         handler.run(
-            TransformStep(
+            run_id=uuid4(),
+            step=TransformStep(
                 key="transform",
                 depends_on=frozenset(),
                 model="stg_orders_bad_unique",
-            )
+            ),
         )
 
     assert "transform test gate failed" in str(exc.value)

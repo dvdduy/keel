@@ -10,7 +10,7 @@ Compensation = Callable[[], None]
 
 
 class StepHandler(Protocol):
-    def run(self, step: PlanStep, *, run_id: UUID) -> Compensation:
+    def run(self, *, run_id: UUID, step: PlanStep) -> Compensation:
         """Execute one plan step and return a compensation for its side effects.
 
         Raise to signal step failure. If this method raises, the failed step itself

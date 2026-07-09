@@ -34,111 +34,73 @@ class FakeClock:
 def _result(
     status: CheckStatus,
     *,
-    violations: int | None,
+    column: str = "order_id",
+    violations: int | None = None,
     detail: str = "detail",
 ) -> CheckResult:
     return CheckResult(
         check_type=QualityCheckType.UNIQUE,
-        column="order_id",
+        column=column,
         status=status,
         detail=detail,
         violations=violations,
     )
 
 
-def test_passed_check_records_result_and_proceeds() -> None:
-    run_id = uuid4()
-    repo = FakeQualityResultRepository()
-
-    decision = apply_gate(
-        run_id=run_id,
-        result=_result(CheckStatus.PASSED, violations=0),
-        results=repo,
-        clock=FakeClock(),
+def test_gate_proceeds_when_all_pass() -> None:
+    decision = decide_gate(
+        [
+            _result(CheckStatus.PASSED, column="order_id", violations=0),
+            _result(CheckStatus.PASSED, column="customer_id", violations=0),
+        ]
     )
 
     assert decision == GateDecision.PROCEED
 
-    recorded = repo.for_run(run_id)
-    assert len(recorded) == 1
-    assert recorded[0].run_id == run_id
-    assert recorded[0].check_type == QualityCheckType.UNIQUE
-    assert recorded[0].column == "order_id"
-    assert recorded[0].status == CheckStatus.PASSED
-    assert recorded[0].violations == 0
+
+def test_gate_blocks_when_any_fails() -> None:
+    decision = decide_gate(
+        [
+            _result(CheckStatus.PASSED, column="order_id", violations=0),
+            _result(CheckStatus.FAILED, column="customer_id", violations=1),
+        ]
+    )
+
+    assert decision == GateDecision.BLOCK
 
 
-def test_failed_check_records_violations_and_blocks() -> None:
+def test_gate_blocks_when_any_unknown() -> None:
+    decision = decide_gate(
+        [
+            _result(CheckStatus.PASSED, column="order_id", violations=0),
+            _result(CheckStatus.UNKNOWN, column="customer_id", violations=None),
+        ]
+    )
+
+    assert decision == GateDecision.BLOCK
+
+
+def test_apply_gate_records_all_before_deciding() -> None:
     run_id = uuid4()
     repo = FakeQualityResultRepository()
 
     decision = apply_gate(
         run_id=run_id,
-        result=_result(CheckStatus.FAILED, violations=1, detail="duplicate order_id"),
-        results=repo,
+        results=[
+            _result(CheckStatus.FAILED, column="order_id", violations=1),
+            _result(CheckStatus.PASSED, column="customer_id", violations=0),
+            _result(CheckStatus.FAILED, column="amount", violations=2),
+        ],
+        repository=repo,
         clock=FakeClock(),
     )
 
-    assert decision == GateDecision.BLOCK
-
     recorded = repo.for_run(run_id)
-    assert len(recorded) == 1
-    assert recorded[0].status == CheckStatus.FAILED
-    assert recorded[0].violations == 1
-    assert recorded[0].detail == "duplicate order_id"
-
-
-def test_unknown_check_records_and_blocks() -> None:
-    run_id = uuid4()
-    repo = FakeQualityResultRepository()
-
-    decision = apply_gate(
-        run_id=run_id,
-        result=_result(CheckStatus.UNKNOWN, violations=None, detail="column missing"),
-        results=repo,
-        clock=FakeClock(),
-    )
 
     assert decision == GateDecision.BLOCK
-
-    recorded = repo.for_run(run_id)
-    assert len(recorded) == 1
-    assert recorded[0].status == CheckStatus.UNKNOWN
-    assert recorded[0].violations is None
-    assert recorded[0].detail == "column missing"
-
-
-def test_gate_records_every_status_a_monitor_would() -> None:
-    run_id = uuid4()
-    repo = FakeQualityResultRepository()
-    clock = FakeClock()
-
-    statuses = (
+    assert len(recorded) == 3
+    assert [result.status for result in recorded] == [
+        CheckStatus.FAILED,
         CheckStatus.PASSED,
         CheckStatus.FAILED,
-        CheckStatus.UNKNOWN,
-    )
-
-    decisions = [
-        apply_gate(
-            run_id=run_id,
-            result=_result(
-                status,
-                violations=0 if status is CheckStatus.PASSED else None,
-            ),
-            results=repo,
-            clock=clock,
-        )
-        for status in statuses
     ]
-
-    assert decisions == [
-        GateDecision.PROCEED,
-        GateDecision.BLOCK,
-        GateDecision.BLOCK,
-    ]
-    assert tuple(result.status for result in repo.for_run(run_id)) == statuses
-
-
-def test_decide_gate_fails_closed_for_unknown() -> None:
-    assert decide_gate(_result(CheckStatus.UNKNOWN, violations=None)) == GateDecision.BLOCK

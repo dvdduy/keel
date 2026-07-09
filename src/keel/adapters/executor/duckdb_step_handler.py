@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from uuid import UUID
 
 from keel.application.execution.plan import (
     IngestStep,
     PlanStep,
-    QualityStep,
+    QualityGateStep,
     TransformStep,
 )
 from keel.application.ports.quality_results import QualityResultRepository
@@ -21,11 +21,15 @@ from keel.application.ports.transform import (
     TestStatus,
     TransformRunner,
 )
-from keel.application.ports.warehouse import WarehouseAdapter
-from keel.application.quality.checks import evaluate_check
+from keel.application.ports.warehouse import WarehouseAdapter, WarehouseError
+from keel.application.quality.checks import (
+    CheckResult,
+    CheckStatus,
+    ColumnMeasurement,
+    evaluate_check,
+)
 from keel.application.quality.gate import GateDecision, apply_gate
 from keel.application.quality.measure import measure_column
-from keel.application.specs.models import QualityCheckSpec
 
 WarehouseFactory = Callable[[], WarehouseAdapter]
 
@@ -49,13 +53,13 @@ class DuckDbStepHandler:
     results: QualityResultRepository | None = None
     clock: Callable[[], datetime] = _utc_now
 
-    def run(self, step: PlanStep, *, run_id: UUID | None = None) -> Compensation:
+    def run(self, *, run_id: UUID, step: PlanStep) -> Compensation:
         match step:
             case IngestStep():
                 return self._run_ingest(step)
             case TransformStep():
                 return self._run_transform(step)
-            case QualityStep():
+            case QualityGateStep():
                 if run_id is None:
                     raise QualityGateFailed("quality gate requires run context")
                 return self._run_quality(step, run_id=run_id)
@@ -86,37 +90,6 @@ class DuckDbStepHandler:
 
         return lambda: self._drop_materialized_models(materialized_models)
 
-    def _run_quality(self, step: QualityStep, *, run_id: UUID) -> Compensation:
-        if self.results is None:
-            raise QualityGateFailed("quality result repository is not configured")
-
-        warehouse = self.warehouse_factory()
-        try:
-            measurement = measure_column(
-                warehouse=warehouse,
-                table=step.table,
-                column=step.column,
-            )
-        finally:
-            warehouse.close()
-
-        result = evaluate_check(
-            check=QualityCheckSpec(type=step.check, column=step.column),
-            measurement=measurement,
-        )
-
-        decision = apply_gate(
-            run_id=run_id,
-            result=result,
-            results=self.results,
-            clock=self.clock,
-        )
-
-        if decision is GateDecision.BLOCK:
-            raise QualityGateFailed(result.detail)
-
-        return lambda: None
-
     def _drop_materialized_models(self, models: tuple[ModelResult, ...]) -> None:
         for model in reversed(models):
             self._drop_relation(f"main.{model.model}")
@@ -127,6 +100,40 @@ class DuckDbStepHandler:
             warehouse.drop_table(relation)
         finally:
             warehouse.close()
+
+    def _run_quality(self, step: QualityGateStep, *, run_id: UUID) -> Compensation:
+        if self.results is None:
+            raise QualityGateFailed("quality result repository is not configured")
+
+        repository = self.results
+
+        warehouse = self.warehouse_factory()
+        try:
+            check_results = tuple(
+                evaluate_check(
+                    check=check,
+                    measurement=measure_column(
+                        warehouse=warehouse,
+                        table=step.table,
+                        column=check.column,
+                    ),
+                )
+                for check in step.checks
+            )
+        finally:
+            warehouse.close()
+
+        decision = apply_gate(
+            run_id=run_id,
+            results=check_results,
+            repository=repository,
+            clock=self.clock,
+        )
+
+        if decision is GateDecision.BLOCK:
+            raise QualityGateFailed(_format_quality_gate_failure(check_results))
+
+        return lambda: None
 
 
 def _format_transform_failure(models: tuple[ModelResult, ...]) -> str:
@@ -152,3 +159,42 @@ def _format_test_failure(report: TestReport) -> str:
         for test in failed
     )
     return f"transform test gate failed: {details}"
+
+
+def _format_quality_gate_failure(results: tuple[CheckResult, ...]) -> str:
+    blockers = [
+        result for result in results if result.status in {CheckStatus.FAILED, CheckStatus.UNKNOWN}
+    ]
+
+    if not blockers:
+        return "quality gate failed"
+
+    details = ", ".join(
+        f"{result.check_type.value}:{result.column}={result.status.value}" for result in blockers
+    )
+    return f"quality gate failed: {details}"
+
+
+def _measure_column(
+    *,
+    warehouse: WarehouseAdapter,
+    table: str,
+    column: str,
+) -> ColumnMeasurement | None:
+    schema = warehouse.describe_table(table)
+
+    if schema is None:
+        return None
+
+    column_names = {observed.name for observed in schema.columns}
+    if column not in column_names:
+        return None
+
+    try:
+        return ColumnMeasurement(
+            row_count=warehouse.row_count(table),
+            null_count=warehouse.null_count(table, column),
+            distinct_count=warehouse.distinct_count(table, column),
+        )
+    except WarehouseError:
+        return None

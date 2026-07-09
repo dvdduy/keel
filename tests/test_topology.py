@@ -6,11 +6,11 @@ from keel.application.execution.plan import (
     ExecutionPlan,
     IngestStep,
     PlanValidationError,
-    QualityStep,
+    QualityGateStep,
     TransformStep,
 )
 from keel.application.execution.topology import topological_order
-from keel.application.specs.models import QualityCheckType
+from keel.application.specs.models import QualityCheckSpec, QualityCheckType
 
 
 def _keys(plan: ExecutionPlan) -> tuple[str, ...]:
@@ -20,11 +20,10 @@ def _keys(plan: ExecutionPlan) -> tuple[str, ...]:
 def test_linear_plan_orders_ingest_transform_quality() -> None:
     plan = ExecutionPlan(
         steps=(
-            QualityStep(
+            QualityGateStep(
                 key="quality:not_null:order_id",
                 depends_on=frozenset({"transform"}),
-                check=QualityCheckType.NOT_NULL,
-                column="order_id",
+                checks=(QualityCheckSpec(type=QualityCheckType.NOT_NULL, column="order_id")),
                 table="main.stg_orders",
             ),
             TransformStep(
@@ -51,11 +50,10 @@ def test_linear_plan_orders_ingest_transform_quality() -> None:
 def test_fanout_quality_steps_ordered_after_last_data_step() -> None:
     plan = ExecutionPlan(
         steps=(
-            QualityStep(
+            QualityGateStep(
                 key="quality:unique:order_id",
                 depends_on=frozenset({"transform"}),
-                check=QualityCheckType.UNIQUE,
-                column="order_id",
+                checks=(QualityCheckSpec(type=QualityCheckType.UNIQUE, column="order_id")),
                 table="main.stg_orders",
             ),
             IngestStep(
@@ -64,11 +62,10 @@ def test_fanout_quality_steps_ordered_after_last_data_step() -> None:
                 source_path="data/orders.csv",
                 destination="raw.orders",
             ),
-            QualityStep(
+            QualityGateStep(
                 key="quality:not_null:customer_id",
                 depends_on=frozenset({"transform"}),
-                check=QualityCheckType.NOT_NULL,
-                column="customer_id",
+                checks=(QualityCheckSpec(type=QualityCheckType.NOT_NULL, column="customer_id")),
                 table="main.stg_orders",
             ),
             TransformStep(
@@ -90,18 +87,16 @@ def test_fanout_quality_steps_ordered_after_last_data_step() -> None:
 def test_ready_steps_broken_by_key_ascending() -> None:
     plan = ExecutionPlan(
         steps=(
-            QualityStep(
+            QualityGateStep(
                 key="quality:z",
                 depends_on=frozenset({"ingest"}),
-                check=QualityCheckType.NOT_NULL,
-                column="z",
+                checks=(QualityCheckSpec(type=QualityCheckType.NOT_NULL, column="z")),
                 table="main.stg_orders",
             ),
-            QualityStep(
+            QualityGateStep(
                 key="quality:a",
                 depends_on=frozenset({"ingest"}),
-                check=QualityCheckType.NOT_NULL,
-                column="a",
+                checks=(QualityCheckSpec(type=QualityCheckType.NOT_NULL, column="a")),
                 table="main.stg_orders",
             ),
             IngestStep(
@@ -134,11 +129,10 @@ def test_cycle_raises_plan_validation_error() -> None:
                 depends_on=frozenset({"a"}),
                 model="stg_orders",
             ),
-            QualityStep(
+            QualityGateStep(
                 key="c",
                 depends_on=frozenset({"b"}),
-                check=QualityCheckType.NOT_NULL,
-                column="order_id",
+                checks=(QualityCheckSpec(type=QualityCheckType.NOT_NULL, column="order_id")),
                 table="main.stg_orders",
             ),
         )

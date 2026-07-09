@@ -10,12 +10,12 @@ from keel.application.execution.plan import (
     ExecutionPlan,
     IngestStep,
     PlanStep,
-    QualityStep,
+    QualityGateStep,
     TransformStep,
 )
 from keel.application.execution.topology import topological_order
 from keel.application.ports.step_handler import Compensation
-from keel.application.specs.models import QualityCheckType
+from keel.application.specs.models import QualityCheckSpec, QualityCheckType
 from keel.domain.run import Run, RunStatus
 
 
@@ -63,12 +63,11 @@ class FakeClock:
 def _plan() -> ExecutionPlan:
     return ExecutionPlan(
         steps=(
-            QualityStep(
+            QualityGateStep(
                 key="quality:not_null:order_id",
                 depends_on=frozenset({"transform"}),
-                check=QualityCheckType.NOT_NULL,
-                column="order_id",
-                table="main.stg_orders",
+                checks=(QualityCheckSpec(type=QualityCheckType.NOT_NULL, column="order_id")),
+                table="raw.orders",
             ),
             TransformStep(
                 key="transform",

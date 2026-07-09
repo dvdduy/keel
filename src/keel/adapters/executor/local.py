@@ -47,7 +47,7 @@ class LocalExecutor:
             run_step.start()
 
             try:
-                compensation = self.handler.run(plan_step, run_id=run.id)
+                compensation = self.handler.run(run_id=run.id, step=plan_step)
             except Exception:
                 run_step.fail()
                 self._rollback(compensations)

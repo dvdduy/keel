@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from keel.application.specs.models import QualityCheckType
+from keel.application.specs.models import QualityCheckSpec
 
 
 class PlanValidationError(Exception):
@@ -32,15 +32,14 @@ class TransformStep:
 
 
 @dataclass(frozen=True)
-class QualityStep:
+class QualityGateStep:
     key: str
     depends_on: frozenset[str]
-    check: QualityCheckType
-    column: str
     table: str
+    checks: tuple[QualityCheckSpec, ...]
 
 
-PlanStep = IngestStep | TransformStep | QualityStep
+PlanStep = IngestStep | TransformStep | QualityGateStep
 
 
 @dataclass(frozen=True)

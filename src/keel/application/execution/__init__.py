@@ -4,7 +4,7 @@ from keel.application.execution.plan import (
     IngestStep,
     PlanStep,
     PlanValidationError,
-    QualityStep,
+    QualityGateStep,
     StepKind,
     TransformStep,
 )
@@ -14,7 +14,7 @@ __all__ = [
     "IngestStep",
     "PlanStep",
     "PlanValidationError",
-    "QualityStep",
+    "QualityGateStep",
     "StepKind",
     "TransformStep",
     "compile_plan",

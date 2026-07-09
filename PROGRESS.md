@@ -391,3 +391,20 @@
 ### Talking point banked
 
 "Bad data is quarantined at the gate, not propagated. A quality check is a monitor that's allowed to say no: it always records a quality_result audit row, then returns a block/proceed decision. Blocking reuses my Saga rollback — the just-materialized relation is compensated away, so nothing reaches serving — while the audit row survives the rollback, because 'the run failed' and 'here's exactly which check failed and by how much' are separate durability guarantees. And it fails closed: even a check I couldn't run blocks, rather than waving data through."
+
+
+## Day 19 — Exhaustive quality gate
+- Date: 2026-07-09
+- Done:
+  - Collapsed per-check quality DAG nodes into one `QualityGateStep` per data layer.
+  - Gate evaluates every declared check before deciding, so one failed/unknown check no longer prevents later checks from being measured.
+  - `apply_gate` records all per-check `QualityResult` rows first, then blocks iff any result is FAILED or UNKNOWN.
+  - Updated executor, compiler, and tests to the new topology: one quality step in the run DAG, many persisted audit rows.
+  - Verified quarantine still happens through upstream compensation while quality audit rows survive for the failed run.
+  - `make check` green.
+
+### Design decision
+- Chose compiler-owned gate collapse: one `QualityGateStep` carrying a tuple of checks. This keeps the Saga DAG focused on execution boundaries while `quality_results` owns per-check audit granularity.
+
+### Talking point banked
+"Quality is the complete, queryable output of every run — the gate evaluates and records every check, not just the first failure. I decoupled execution topology, one gate node per layer, from audit granularity, per-check verdict rows, so on-call sees the whole picture in one run instead of peeling failures off one re-run at a time — and it is exhaustive and fail-closed at once."

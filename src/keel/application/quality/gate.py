@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from enum import StrEnum
 from typing import assert_never
@@ -16,36 +16,42 @@ class GateDecision(StrEnum):
     BLOCK = "block"
 
 
-def decide_gate(result: CheckResult) -> GateDecision:
-    match result.status:
-        case CheckStatus.PASSED:
-            return GateDecision.PROCEED
-        case CheckStatus.FAILED:
-            return GateDecision.BLOCK
-        case CheckStatus.UNKNOWN:
-            return GateDecision.BLOCK
-        case _ as unhandled:
-            assert_never(unhandled)
+def decide_gate(results: Sequence[CheckResult]) -> GateDecision:
+    """Proceed only when every quality check passed."""
+
+    for result in results:
+        match result.status:
+            case CheckStatus.PASSED:
+                continue
+            case CheckStatus.FAILED | CheckStatus.UNKNOWN:
+                return GateDecision.BLOCK
+            case _ as unhandled:
+                assert_never(unhandled)
+
+    return GateDecision.PROCEED
 
 
 def apply_gate(
     *,
     run_id: UUID,
-    result: CheckResult,
-    results: QualityResultRepository,
+    results: Sequence[CheckResult],
+    repository: QualityResultRepository,
     clock: Callable[[], datetime],
 ) -> GateDecision:
-    results.add(
-        QualityResult(
-            id=uuid4(),
-            run_id=run_id,
-            check_type=result.check_type,
-            column=result.column,
-            status=result.status,
-            violations=result.violations,
-            detail=result.detail,
-            created_at=clock(),
-        )
-    )
+    """Record every check result, then decide whether the gate blocks."""
 
-    return decide_gate(result)
+    for result in results:
+        repository.add(
+            QualityResult(
+                id=uuid4(),
+                run_id=run_id,
+                check_type=result.check_type,
+                column=result.column,
+                status=result.status,
+                violations=result.violations,
+                detail=result.detail,
+                created_at=clock(),
+            )
+        )
+
+    return decide_gate(results)
