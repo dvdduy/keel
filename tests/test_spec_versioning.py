@@ -120,7 +120,8 @@ def test_content_hash_ignores_representation_defaults() -> None:
 
 def test_content_hash_ignores_key_order() -> None:
     one = _spec(_orders_spec_yaml())
-    reordered = _spec("""quality_checks: []
+    reordered = _spec(
+        """quality_checks: []
 freshness:
   max_age_minutes: 60
 destination: analytics.orders
@@ -135,7 +136,8 @@ source:
 owner: data-platform@example.com
 team: analytics
 name: orders_daily
-""")
+"""
+    )
 
     assert spec_content_hash(one) == spec_content_hash(reordered)
 

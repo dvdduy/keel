@@ -58,6 +58,9 @@ class DuckDbWarehouse:
             )
         )
 
+    def close(self) -> None:
+        self._con.close()
+
     @staticmethod
     def _to_column_type(physical_type: str) -> ColumnType:
         normalized = physical_type.upper()

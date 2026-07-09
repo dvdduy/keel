@@ -20,7 +20,8 @@ def _pipeline_id(seeded_pipeline) -> UUID:
 
 
 def _spec(destination: str = "analytics.orders"):
-    return parse_pipeline_spec_yaml(f"""name: orders_daily
+    return parse_pipeline_spec_yaml(
+        f"""name: orders_daily
 team: analytics
 owner: data-platform@example.com
 source:
@@ -35,7 +36,8 @@ destination: {destination}
 freshness:
   max_age_minutes: 60
 quality_checks: []
-""")
+"""
+    )
 
 
 def _dropped_amount_spec() -> PipelineSpec:

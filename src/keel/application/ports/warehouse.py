@@ -26,3 +26,7 @@ class WarehouseAdapter(Protocol):
         Warehouse-native physical types are translated to Keel ColumnType here.
         """
         ...
+
+    def close(self) -> None:
+        """Release any held warehouse resources."""
+        ...

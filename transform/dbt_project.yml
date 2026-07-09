@@ -1,0 +1,6 @@
+name: keel_transform
+version: "1.0.0"
+
+profile: keel
+
+model-paths: ["models"]

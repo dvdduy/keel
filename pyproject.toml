@@ -16,7 +16,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ruff", "black", "mypy", "pytest", "import-linter", "types-PyYAML",]
+dev = [
+    "ruff",
+    "black==25.12.0",
+    "mypy",
+    "pytest",
+    "import-linter",
+    "types-PyYAML",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -57,11 +57,13 @@ def test_describe_table_translates_decimal_precision_scale(
     con = duckdb.connect(database=str(database))
     try:
         con.execute("CREATE SCHEMA raw")
-        con.execute("""
+        con.execute(
+            """
             CREATE TABLE raw.decimal_orders (
                 amount DECIMAL(18,3)
             )
-            """)
+            """
+        )
     finally:
         con.close()
 

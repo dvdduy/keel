@@ -256,3 +256,16 @@
 
 ### Talking point banked
 "Reconciliation is atomic in the practical distributed-systems sense: when a rollout fails after mutating external systems, the executor unwinds successful steps with Saga-style compensating actions in reverse order. I also understand the limitation: undo depends on prior state — undo(create) is drop, but undo(replace) requires restore."
+
+
+## Day 13 — dbt transform backend behind a port
+- Date: 2026-07-08
+- Done:
+  - Added a Keel-owned `TransformRunner` port with structured per-model results.
+  - Added `DbtTransformRunner` adapter that invokes dbt as a subprocess, with zero `import dbt` in `src/`.
+  - Added dbt project scaffold under repo-root `transform/`.
+  - Added warehouse `close()` lifecycle seam so DuckDB releases the file lock before dbt opens the same warehouse.
+  - Tests cover successful staging materialization, model SQL failure as `TransformResult(ok=False)`, and tool failure as `TransformError`.
+
+### Talking point banked
+"I integrated dbt as a governed transform layer without coupling Keel to it — dbt runs as a subprocess behind a TransformRunner port, so the codebase contains zero import dbt, its dependency pins never touch the control plane, and a model failure is a structured result while only a tool failure raises. Swapping dbt for another SQL transformer is an adapter change."
