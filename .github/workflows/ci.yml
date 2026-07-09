@@ -38,8 +38,15 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev]"
 
-      - name: Install dbt toolchain
-        run: pip install dbt-duckdb
+      # dbt-core caps pathspec <0.13 while mypy needs >=1.0 — the constraints
+      # don't intersect, so dbt cannot share Keel's environment. Keel never
+      # imports dbt (it's invoked as a subprocess behind a port), so we install
+      # it in its own isolated venv via pipx and expose only the `dbt` binary.
+      - name: Install dbt toolchain (isolated from Keel's environment)
+        run: |
+          pipx install dbt-core
+          pipx inject dbt-core dbt-duckdb
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Apply migrations
         run: alembic upgrade head
