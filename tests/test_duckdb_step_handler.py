@@ -7,9 +7,12 @@ from uuid import uuid4
 
 from keel.adapters.executor.duckdb_step_handler import DuckDbStepHandler
 from keel.adapters.executor.local import LocalExecutor
+from keel.adapters.transform.dbt_runner import DbtTransformRunner
 from keel.adapters.warehouse.duckdb_warehouse import DuckDbWarehouse
 from keel.application.execution.plan import ExecutionPlan, IngestStep, TransformStep
 from keel.domain.run import Run, RunStatus
+
+PROJECT_DIR = Path(__file__).resolve().parents[1] / "transform"
 
 
 @dataclass
@@ -31,8 +34,15 @@ class FakeClock:
 
 
 def test_failed_plan_drops_successful_ingest_table(tmp_path) -> None:
-    warehouse = DuckDbWarehouse(str(tmp_path / "w.duckdb"))
-    handler = DuckDbStepHandler(warehouse=warehouse)
+    warehouse_path = tmp_path / "warehouse.duckdb"
+
+    handler = DuckDbStepHandler(
+        warehouse_factory=lambda: DuckDbWarehouse(str(warehouse_path)),
+        transform_runner=DbtTransformRunner(
+            project_dir=PROJECT_DIR,
+            warehouse_path=str(warehouse_path),
+        ),
+    )
     executor = LocalExecutor(
         runs=FakeRunRepository(),
         handler=handler,
@@ -50,7 +60,7 @@ def test_failed_plan_drops_successful_ingest_table(tmp_path) -> None:
             TransformStep(
                 key="transform",
                 depends_on=frozenset({"ingest"}),
-                model="stg_orders",
+                model="broken_model",
             ),
         )
     )
@@ -58,4 +68,9 @@ def test_failed_plan_drops_successful_ingest_table(tmp_path) -> None:
     run = executor.execute(uuid4(), plan)
 
     assert run.status == RunStatus.FAILED
-    assert warehouse.describe_table("raw.orders") is None
+
+    warehouse = DuckDbWarehouse(str(warehouse_path))
+    try:
+        assert warehouse.describe_table("raw.orders") is None
+    finally:
+        warehouse.close()

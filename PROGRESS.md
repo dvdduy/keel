@@ -269,3 +269,21 @@
 
 ### Talking point banked
 "I integrated dbt as a governed transform layer without coupling Keel to it — dbt runs as a subprocess behind a TransformRunner port, so the codebase contains zero import dbt, its dependency pins never touch the control plane, and a model failure is a structured result while only a tool failure raises. Swapping dbt for another SQL transformer is an adapter change."
+
+
+## Day 13 — dbt as a transform backend behind a port
+
+* Date: 2026-07-08
+* Done:
+
+  * Added a Keel-owned `TransformRunner` port with structured per-model transform results.
+  * Added `DbtTransformRunner`, which invokes dbt as a subprocess and parses `target/run_results.json`.
+  * Added the dbt project scaffold under repo-root `transform/`.
+  * Added warehouse `close()` so DuckDB releases its file lock before the dbt subprocess opens the same warehouse.
+  * Proved model SQL failure is a structured `TransformResult(ok=False)`, while tool failure raises `TransformError`.
+  * Wired `TransformStep` into the local DuckDB step handler so `LocalExecutor` can run ingest → transform end to end.
+  * Kept dbt out of Keel’s control-plane imports; `src/` contains zero `import dbt`.
+
+### Talking point banked
+
+"I integrated dbt as a governed transform layer without coupling Keel to it — dbt runs as a subprocess behind a TransformRunner port, so the codebase contains zero `import dbt`, its dependency pins never touch the control plane, and a model failure is a structured result while only a tool failure raises. Swapping dbt for another SQL transformer is an adapter change."
