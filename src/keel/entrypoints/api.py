@@ -118,6 +118,8 @@ def create_app(session_factory: sessionmaker[Session]) -> FastAPI:
     @app.get("/lineage/{dataset}/impact", response_model=LineageImpactOut)
     def get_lineage_impact(dataset: str, versions: SpecVersionsDep) -> LineageImpactOut:
         graph = build_lineage_graph(versions.heads())
+        if not graph.contains(dataset):
+            raise HTTPException(status_code=404, detail="lineage dataset not found")
         return LineageImpactOut(dataset=dataset, impacted=tuple(sorted(graph.impacted_by(dataset))))
 
     return app

@@ -38,6 +38,9 @@ class LineageGraph:
 
         return self._reachable_from(node, self._upstream)
 
+    def contains(self, node: str) -> bool:
+        return node in self._downstream or node in self._upstream
+
     @staticmethod
     def _reachable_from(node: str, adjacency: Mapping[str, frozenset[str]]) -> frozenset[str]:
         visited = {node}

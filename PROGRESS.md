@@ -612,3 +612,22 @@
 
 ### Talking point banked
 "The CLI is a thin client over the same control-plane API humans and CI use - not a second in-process entrypoint - so the compatibility gate and error contract cannot be bypassed by picking a different door. import-linter cannot enforce that boundary, which is exactly why it is a deliberate design decision I can defend."
+
+## Day 31 - Read-only MCP agent surface
+- Date: 2026-07-09
+- Done:
+  - Added `src/keel/entrypoints/mcp_server.py` as a FastMCP driving adapter over the HTTP control plane.
+  - Exposed read-only MCP tools for catalog list/show, run show, lineage impact, and spec head.
+  - Introduced `ReadOnlyControlPlane`, whose public surface only has `get`; there is deliberately no `post`, `put`, `delete`, or `patch`.
+  - Promoted `mcp` to runtime dependencies and scoped mypy's SDK typing friction to `mcp.*`.
+  - Tightened lineage impact misses to return HTTP `404` when the requested dataset is not in the current graph.
+  - Covered the MCP tools with ASGITransport tests against the FastAPI app, including structured `404` results and a GET-only spy.
+
+### Design decisions
+- The MCP server is a third door into Keel, so it follows the same rule as the CLI: over HTTP only, never in-process use-case calls.
+- Read-only is enforced by construction. Tools receive a client wrapper that cannot express writes, so prompt injection or agent error cannot mutate state through this surface.
+- `schema_diff` remains deferred until the control plane has a read endpoint such as `GET .../specs/diff`; the compatibility engine currently only exists on the write path.
+- `incident_*` tools remain deferred until incidents have persistence, a port, and `/incidents` API routes.
+
+### Talking point banked
+"The agent's entire tool surface is read-only by construction: the tools reach the control plane through a client that has no write verb, so no prompt injection or agent error can mutate Keel through this seam. It is a property of the type, tested in CI, not a policy I hope holds. And it is the same HTTP door humans and CI use, so when write tools land they inherit the compatibility gate instead of routing around it."

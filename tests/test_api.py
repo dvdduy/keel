@@ -283,6 +283,16 @@ def test_get_lineage_impact_returns_downstream_closure() -> None:
     assert response.json() == {"dataset": "analytics.orders", "impacted": []}
 
 
+def test_get_lineage_impact_unknown_dataset_returns_404() -> None:
+    client = _client()
+    _post_spec(client, uuid4(), _orders_spec_yaml(destination="analytics.orders"))
+
+    response = client.get("/lineage/analytics.unknown/impact")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "lineage dataset not found"
+
+
 def test_openapi_schema_is_served() -> None:
     response = _client().get("/openapi.json")
 
