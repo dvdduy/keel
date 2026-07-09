@@ -572,3 +572,43 @@
 
 ### Talking point banked
 "Runs and incidents make opposite storage choices on purpose. A run mutates because it is a short-lived execution artifact where the final state matters most. An incident is event-sourced because the transition history is the product: ack, assignment, and resolution form the timeline post-incident review needs. Status is just a fold over immutable events."
+
+## Day 28 - FastAPI control-plane surface
+- Date: 2026-07-09
+- Done:
+  - Added the FastAPI control-plane surface via `create_app(...)`.
+  - Exposed spec submission and head lookup under `/pipelines/{pipeline_id}/specs`.
+  - Surfaced the schema compatibility gate as HTTP `409` with structured `breaking_changes`.
+  - Surfaced spec parse and validation failures as HTTP `422` with structured diagnostics.
+  - Exposed catalog listing/show, run show, and lineage impact endpoints.
+  - Kept OpenAPI generation live through FastAPI's `/openapi.json`.
+  - Covered the API contract in `tests/test_api.py`, including 409, 422, 404, catalog, runs, lineage, and OpenAPI.
+
+### Design decisions
+- The API is the control plane contract. It owns translation from application/domain failures into stable HTTP status codes and JSON shapes.
+- Resource misses are explicit `404`s rather than empty success responses, because callers need to distinguish absence from an empty result.
+- Incident API endpoints remain deferred until incident persistence exists. The pure incident model, grouping, lifecycle, and routing are ready, but there is not yet a port, ORM mapping, migration, or `/incidents` contract to expose honestly.
+
+### Talking point banked
+"The whole platform is drivable through a documented control-plane API. The API is where compatibility gates and product-grade error translation live, so clients get stable behavior instead of depending on internal use-case exceptions."
+
+## Day 29 - CLI self-serve surface
+- Date: 2026-07-09
+- Done:
+  - Added `src/keel/entrypoints/cli.py` as an over-API client, not an in-process caller of use cases.
+  - Exposed `keel` as a console script in `pyproject.toml`.
+  - Promoted `httpx` to a runtime dependency because the shipped CLI needs it.
+  - Read the control-plane base URL from `KEEL_API_URL`, defaulting to `http://localhost:8000`, through one helper.
+  - Implemented `keel spec submit`, `keel spec head`, `keel catalog list`, `keel catalog show`, `keel run show`, and `keel lineage impact`.
+  - Added human-readable default output and parseable `--json` output for success responses.
+  - Turned `409`, `422`, `404`, and connection-refused failures into clean CLI output with non-zero exits.
+  - Covered the CLI with `tests/test_cli.py` using `httpx.ASGITransport` against the FastAPI app, so tests exercise the API contract without a live server.
+
+### Design decisions
+- The CLI deliberately drives the same HTTP control-plane API that humans and CI use. It does not import application use cases directly, even though the layer rules would allow it.
+- CLI output is part of the product contract: default output is readable for people, `--json` is for scripts, and exit codes carry success/failure.
+- `keel incident ...` is deferred until incident persistence lands: port, ORM mapping, migration, and `/incidents` endpoint are the missing pieces.
+- `keel run trigger` is deferred behind a POST `/pipelines/{pipeline_id}/runs` endpoint that can assemble the executor, warehouse, transform runner, and step handler through API dependency wiring.
+
+### Talking point banked
+"The CLI is a thin client over the same control-plane API humans and CI use - not a second in-process entrypoint - so the compatibility gate and error contract cannot be bypassed by picking a different door. import-linter cannot enforce that boundary, which is exactly why it is a deliberate design decision I can defend."

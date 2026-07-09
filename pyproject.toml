@@ -8,6 +8,7 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.116",
+    "httpx",
     "sqlalchemy>=2.0",
     "pydantic-settings>=2.0",
     "psycopg[binary]>=3.1",
@@ -22,11 +23,13 @@ dev = [
     "black==25.12.0",
     "mypy",
     "pytest",
-    "httpx",
     "import-linter",
     "types-PyYAML",
     "dbt-duckdb>=1.10,<1.11",
 ]
+
+[project.scripts]
+keel = "keel.entrypoints.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
