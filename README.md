@@ -2,7 +2,7 @@
 
 Keel is a governed data-platform capstone: declarative pipeline specs, schema contracts, drift detection, dbt-backed transforms, quality gates, lineage, SLOs, incidents, read-only MCP tools, and a deterministic data-ops RCA agent.
 
-> **Status:** Build complete through M9 with 310 tests. The remaining work is production hardening, not hidden milestone scope. See [PROGRESS.md](./PROGRESS.md) for the day-by-day build log.
+> **Status:** Build complete through M9. 319 application/unit tests run with no external services; a further 24 integration tests exercise the Postgres control plane and the dbt transform runner (require `docker-compose up` + `dbt` on PATH). See [PROGRESS.md](./PROGRESS.md) for the day-by-day build log.
 
 ## Why It Exists
 
@@ -14,7 +14,8 @@ The flagship scenario is failure-shaped: an upstream schema change tries to brea
 
 ```bash
 make install   # install Keel with developer dependencies
-make check     # lint, type-check src/evals, run tests, enforce imports
+make check     # lint, type-check src/evals, run no-service tests, enforce imports
+make check-all # run the same gate plus Postgres/dbt integration tests
 make demo      # run the narrated breaking-change demo
 make seed      # alias for the demo, kept for the advertised seed path
 make eval      # run the RCA evaluation gate
@@ -51,7 +52,7 @@ Ports isolate the volatile seams: control-plane storage, warehouse execution, tr
 
 ## Tech Stack
 
-Python, FastAPI, Pydantic, SQLAlchemy + Alembic, Postgres, DuckDB, dbt-duckdb, sqlglot, LangGraph, MCP, pytest, ruff, black, mypy, import-linter, docker-compose, GitHub Actions.
+Python, FastAPI, Pydantic, SQLAlchemy + Alembic, Postgres, DuckDB, dbt-duckdb, LangGraph, MCP, pytest, ruff, black, mypy, import-linter, docker-compose, GitHub Actions.
 
 ## Roadmap
 

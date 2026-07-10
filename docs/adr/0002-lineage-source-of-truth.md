@@ -52,6 +52,9 @@ A parser such as sqlglot could cover SQL outside dbt and may eventually support
 column-level lineage. It is attractive as a tool-neutral route from executable
 text to observed dependencies.
 
+SQL-parsing-via-sqlglot is rejected as Keel's lineage authority because parsed
+lineage can drift silently from producer intent.
+
 For dbt models, raw SQL is not the executable statement: it contains Jinja,
 macros, `ref()` calls, dialect details, and ephemeral model expansion. Parsing it
 duplicates dbt's work with less context and risks silently missing or inventing

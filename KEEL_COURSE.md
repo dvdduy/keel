@@ -32,7 +32,7 @@ A mentor-guided build of **Keel**, a self-serve governed data platform, as a pro
 
 ## Tech stack
 
-Python · FastAPI · Pydantic · SQLAlchemy + Alembic · DuckDB (warehouse, behind an adapter) · Postgres (control plane) · dbt-duckdb · sqlglot · LangGraph + MCP (agent) · pytest · ruff/black/mypy · import-linter · docker-compose · GitHub Actions.
+Python · FastAPI · Pydantic · SQLAlchemy + Alembic · DuckDB (warehouse, behind an adapter) · Postgres (control plane) · dbt-duckdb · LangGraph + MCP (agent) · pytest · ruff/black/mypy · import-linter · docker-compose · GitHub Actions.
 
 ## Non-goals (documented, not built)
 

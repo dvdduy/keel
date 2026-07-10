@@ -1,4 +1,4 @@
-.PHONY: install format lint type test eval demo seed check
+.PHONY: install format lint type test test-integration eval demo seed check check-all
 
 install:
 	pip install -e ".[dev]"
@@ -15,7 +15,10 @@ type:
 	mypy src evals
 
 test:
-	pytest
+	python -m pytest -m "not integration"
+
+test-integration:
+	python -m pytest -m integration
 
 eval:
 	python -m evals.rca.run
@@ -26,4 +29,7 @@ demo:
 seed: demo
 
 check: lint type test
+	lint-imports
+
+check-all: lint type test test-integration
 	lint-imports
