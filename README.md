@@ -2,7 +2,7 @@
 
 Keel is a governed data-platform capstone: declarative pipeline specs, schema contracts, drift detection, dbt-backed transforms, quality gates, lineage, SLOs, incidents, read-only MCP tools, and a deterministic data-ops RCA agent.
 
-> **Status:** Build complete through M9. 319 application/unit tests run with no external services; a further 24 integration tests exercise the Postgres control plane and the dbt transform runner (require `docker-compose up` + `dbt` on PATH). See [PROGRESS.md](./PROGRESS.md) for the day-by-day build log.
+> **Status:** Build complete through M9. 319 application/unit tests run with no external services; a further 24 integration tests exercise the Postgres control plane and the dbt transform runner (require `docker-compose up` + `dbt` on PATH). See [docs/BUILD_LOG.md](./docs/BUILD_LOG.md) for the day-by-day build log.
 
 ## Why It Exists
 
@@ -12,16 +12,16 @@ The flagship scenario is failure-shaped: an upstream schema change tries to brea
 
 ## Highlights
 
-A few of the design decisions this project is built to defend in an interview:
+A few of the design decisions worth a closer look:
 
-- **Contract compatibility engine (Day 7).** Instead of a hand-maintained table of breaking-change rules, the compatibility check reduces to one invariant — a new contract must accept every dataset the old one accepted — plus a rule that columns can't be silently dropped. Breaking changes are rejected by default with a structured diff; overriding them is explicit and audited.
-- **Quarantine over propagation (Day 18).** A quality check is a monitor that's allowed to say no. It always records an audit row, then blocks or proceeds. Blocking reuses the same saga-style rollback used for run failures — bad data is compensated away before it reaches anything downstream — and a check that couldn't even run still blocks, rather than waving data through.
-- **Incident grouping by root cause (Day 26).** Dedup is a graph problem before it's a notification problem: find the connected component of breaching subjects, then use lineage direction to pick the root incidents actually worth paging on. One upstream failure produces one page, not one per downstream table.
-- **Agent guardrails at the narrator boundary (Day 33).** The agent's only untrusted surface is the LLM-written narration. It may reword a runbook line, but if it drops the machine-verified evidence anchor, the system falls back to the deterministic line. Facts stay structurally immutable across that boundary.
-- **Eval-gated RCA, not a vibes check (Day 34).** A labeled dossier goes into `diagnose`, a ranked hypothesis list comes out, and CI fails the build if top-line accuracy drops or confident-wrong causes rise. LLM-as-judge is deliberately deferred until a model actually owns part of the reasoning.
-- **Observability as a thin port (Day 35).** The application owns a tiny lifecycle port; the adapter translates that into traces, logs, and SLIs. Telemetry never recomputes domain facts — it projects them from the run aggregate after the state machine has already moved.
+- **Contract compatibility engine.** Instead of a hand-maintained table of breaking-change rules, the compatibility check reduces to one invariant — a new contract must accept every dataset the old one accepted — plus a rule that columns can't be silently dropped. Breaking changes are rejected by default with a structured diff; overriding them is explicit and audited.
+- **Quarantine over propagation.** A quality check is a monitor that's allowed to say no. It always records an audit row, then blocks or proceeds. Blocking reuses the same saga-style rollback used for run failures — bad data is compensated away before it reaches anything downstream — and a check that couldn't even run still blocks, rather than waving data through.
+- **Incident grouping by root cause.** Dedup is a graph problem before it's a notification problem: find the connected component of breaching subjects, then use lineage direction to pick the root incidents actually worth paging on. One upstream failure produces one page, not one per downstream table.
+- **Agent guardrails at the narrator boundary.** The agent's only untrusted surface is the LLM-written narration. It may reword a runbook line, but if it drops the machine-verified evidence anchor, the system falls back to the deterministic line. Facts stay structurally immutable across that boundary.
+- **Eval-gated RCA, not a vibes check.** A labeled dossier goes into `diagnose`, a ranked hypothesis list comes out, and CI fails the build if top-line accuracy drops or confident-wrong causes rise. LLM-as-judge is deliberately deferred until a model actually owns part of the reasoning.
+- **Observability as a thin port.** The application owns a tiny lifecycle port; the adapter translates that into traces, logs, and SLIs. Telemetry never recomputes domain facts — it projects them from the run aggregate after the state machine has already moved.
 
-Full day-by-day build log, including every banked talking point: [PROGRESS.md](./PROGRESS.md).
+Full day-by-day build log, including every banked talking point: [docs/BUILD_LOG.md](./docs/BUILD_LOG.md).
 
 ## Quickstart
 
