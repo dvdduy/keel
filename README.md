@@ -1,55 +1,82 @@
 # Keel
 
-A self-serve, governed data platform — built as a production-quality portfolio capstone.
+Keel is a governed data-platform capstone: declarative pipeline specs, schema contracts, drift detection, dbt-backed transforms, quality gates, lineage, SLOs, incidents, read-only MCP tools, and a deterministic data-ops RCA agent.
 
-Keel lets a team declare a data pipeline in a single file — source, schema contract, transforms, owner, freshness SLO, quality checks — and handles the rest: reconciling it into an executable pipeline, running ingest → transform → quality gates, capturing lineage, tracking freshness/quality SLOs, and opening context-enriched incidents when they breach. Data is treated as a product: every dataset has an owner, a contract, and an SLA.
+> **Status:** Build complete through M9 with 310 tests. The remaining work is production hardening, not hidden milestone scope. See [PROGRESS.md](./PROGRESS.md) for the day-by-day build log.
 
-> **Status:** In active development, built one focused PR at a time. See [`PROGRESS.md`](./PROGRESS.md) for current state; the roadmap below shows where it's headed.
+## Why It Exists
 
-## Why this exists
+At scale, bespoke pipelines produce inconsistent contracts, silent staleness, weak lineage, and noisy incident response. Keel is the paved road: producers declare the dataset they intend to publish, and the platform reconciles, runs, gates, observes, and diagnoses it.
 
-At scale, every team rolling its own bespoke pipelines produces inconsistent quality, no shared lineage, silent staleness, and ungoverned PII. Keel is the paved road: one platform that gives data producers self-serve pipelines with governance — contracts, quality gates, lineage, SLOs, and incident response — built in. Designed with fintech-grade concerns front of mind: correctness under re-runs, schema-change safety, and auditability.
-
-## Tech stack
-
-Python · FastAPI · Pydantic · SQLAlchemy + Alembic · Postgres (control plane) · DuckDB (warehouse, behind an adapter) · dbt-duckdb · sqlglot · LangGraph + MCP (data-ops agent) · pytest · ruff / black / mypy · import-linter · docker-compose · GitHub Actions
-
-## Architecture
-
-Clean-architecture layering with dependencies pointing inward: `domain` depends on nothing; adapters and interfaces depend on the core, never the reverse (enforced in CI with import-linter). The warehouse, orchestrator, and LLM are pluggable adapters behind interfaces — DuckDB today, a cloud warehouse tomorrow is a one-adapter swap.
-
-_A full architecture doc and the ADR trail land as the build progresses (see [`docs/adr/`](./docs/adr))._
+The flagship scenario is failure-shaped: an upstream schema change tries to break downstream consumers. Keel rejects it by default. If someone forces it through with an audited override, the platform contains the damage with quarantine, one grouped incident, and a deterministic RCA dossier.
 
 ## Quickstart
 
-_Lands with the Day 1–3 scaffold. Target shape:_
+```bash
+make install   # install Keel with developer dependencies
+make check     # lint, type-check src/evals, run tests, enforce imports
+make demo      # run the narrated breaking-change demo
+make seed      # alias for the demo, kept for the advertised seed path
+make eval      # run the RCA evaluation gate
+```
+
+## Run The Demo
 
 ```bash
-make up      # start Postgres + app via docker-compose
-make test    # run the suite
-make seed    # hello pipeline: seed CSV -> raw table + a recorded run
+make demo
 ```
+
+The demo walks the core governance story:
+
+1. Submit `orders_raw` and a visible fan-out: `raw.orders -> {main.orders_stg, main.revenue_daily, main.customer_ltv, main.fulfillment_health, main.executive_revenue}`.
+2. Drop `amount` from the upstream contract and show the compatibility rejection. Nothing ships.
+3. Resubmit with `--allow-breaking` and print the audited override.
+4. Materialize data missing `amount`, hit the downstream quality gate, quarantine the table, breach the SLO, and collapse the fan-out into one incident group.
+5. Assemble the RCA dossier and diagnose the upstream subject.
+
+The same stages are imported by [tests/test_demo_breaking_change.py](./tests/test_demo_breaking_change.py), so the demo is characterization-tested in CI.
+
+## Architecture
+
+Dependencies point inward and import-linter enforces the boundary:
+
+```text
+entrypoints  ->  adapters  ->  application  ->  domain
+ API/CLI/MCP     DB/DuckDB     use cases        run state
+                dbt/agent      specs/lineage
+                              quality/SLO/RCA
+```
+
+Ports isolate the volatile seams: control-plane storage, warehouse execution, transform runner, MCP reader, telemetry, and the agent graph. DuckDB and dbt-duckdb are local adapters, not architectural commitments.
+
+## Tech Stack
+
+Python, FastAPI, Pydantic, SQLAlchemy + Alembic, Postgres, DuckDB, dbt-duckdb, sqlglot, LangGraph, MCP, pytest, ruff, black, mypy, import-linter, docker-compose, GitHub Actions.
 
 ## Roadmap
 
-Built across 10 milestones:
+| Milestone | Theme | Result |
+|-----------|-------|--------|
+| M0 | Foundations | Clean architecture, CI, walking skeleton |
+| M1 | Spec & Contract | Declarative specs, parser diagnostics, compatibility engine |
+| M2 | Reconciler & Runner | Desired-to-actual planning, idempotent run state, drift checks |
+| M3 | Transform | dbt-duckdb execution and manifest-backed verification |
+| M4 | Quality & Gates | Freshness, column checks, quarantine semantics |
+| M5 | Catalog & Lineage | Dataset catalog, declared lineage, impact traversal |
+| M6 | SLO & Incident | Error-budget evaluation, incident routing, grouped blast radius |
+| M7 | API & CLI | Self-serve control-plane surface over the application API |
+| M8 | MCP + Agent | Read-only MCP tools and eval-gated deterministic RCA |
+| M9 | Observability | Executor observer seam, RCA eval gate, packaged demo story |
 
-| Milestone | Theme |
-|-----------|-------|
-| M0 Foundations | Clean layering, CI, walking skeleton |
-| M1 Spec & Contract | Declarative pipeline spec + schema-compatibility engine |
-| M2 Reconciler & Runner | Desired→actual reconciliation, idempotent runs, drift detection |
-| M3 Transform | dbt-duckdb ELT layer + manifest capture |
-| M4 Quality & Gates | Freshness, integrity checks, quarantine |
-| M5 Catalog & Lineage | Dataset registry, table-level lineage, impact analysis |
-| M6 SLO & Incident | Error budgets, grouped incidents |
-| M7 API & CLI | Self-serve control-plane surface |
-| M8 MCP + Agent | Eval-gated, guardrailed data-ops agent |
-| M9 Observability | Traces, demo, productionization story |
+## ADRs
 
-## Non-goals
+- [ADR 0001: Freshness clock model](./docs/adr/0001-freshness-clock.md)
+- [ADR 0002: Declared-and-verified lineage](./docs/adr/0002-lineage-source-of-truth.md)
+- [ADR 0003: Compatibility rules](./docs/adr/0003-compatibility-rules.md)
 
-Deliberately out of scope — documented, not built: real auth/SSO · DR/multi-region · regulatory certification · reverse-ETL · time-travel · tenant enforcement (quotas/RBAC) · cloud deploy. Each carries a "how I'd productionize this" note.
+## Productionization
+
+Keel deliberately stops short of production platform concerns such as auth/SSO, tenant enforcement, multi-region DR, cloud deployment, and full contract-diff observability. Those are documented in [docs/PRODUCTIONIZATION.md](./docs/PRODUCTIONIZATION.md), including the seam where each real implementation plugs in.
 
 ## License
 

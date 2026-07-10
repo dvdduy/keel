@@ -1,4 +1,4 @@
-.PHONY: install format lint type test eval check
+.PHONY: install format lint type test eval demo seed check
 
 install:
 	pip install -e ".[dev]"
@@ -19,6 +19,11 @@ test:
 
 eval:
 	python -m evals.rca.run
+
+demo:
+	python -m demo.breaking_change
+
+seed: demo
 
 check: lint type test
 	lint-imports
