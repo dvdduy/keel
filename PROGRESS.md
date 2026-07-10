@@ -707,3 +707,19 @@
 
 ### Talking point banked
 "Because RCA is deterministic today, the eval is a characterization gate instead of a vibes check: a labeled dossier goes into `diagnose`, a ranked hypothesis list comes out, and CI fails if top-line accuracy drops or confident-wrong causes rise. LLM judging is deliberately deferred until a model owns part of the reasoning or prose quality surface."
+
+## Day 35 - Observability seam
+- Date: 2026-07-10
+- Done:
+  - Added an application-owned `RunObserver` port plus `NullObserver` default for run lifecycle observations.
+  - Wired `LocalExecutor` to emit `run_started`, `step_started`, `step_finished`, and `run_finished` around the existing domain state transitions.
+  - Preserved the dependency arrow: OpenTelemetry remains absent from application and domain code; telemetry is now a port that an adapter can implement.
+  - Covered happy path ordering, failure status emission, default no-op behavior, and started/finished pairing on failure with focused executor tests.
+
+### Design decisions
+- Observability is modeled as lifecycle callbacks, not a span factory. The executor reports domain objects after their state transitions, so telemetry reads status from the `Run` and `RunStep` source of truth.
+- The observer currently receives the mutable aggregate. That is an intentional seam for today: if observer work ever becomes asynchronous, cross-threaded, or independently retained, the upgrade path is to pass frozen observation snapshots derived at the boundary.
+- `NullObserver` keeps existing executor call sites unchanged and makes the seam opt-in until a concrete adapter is wired.
+
+### Talking point banked
+"Observability is cross-cutting, but it is still infrastructure: the application owns a tiny lifecycle port and the adapter translates that into traces, logs, and SLIs. The domain facts are not recomputed by telemetry; they are projected from the run aggregate after the state machine has moved."
