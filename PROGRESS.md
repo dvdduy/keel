@@ -638,6 +638,7 @@
   - Added a pure incident-agent context assembler in `application.agent`.
   - Defined the `PlatformReader` read port plus Keel-owned `DatasetOwner`, `RunView`, and `IncidentDossier` value objects.
   - Implemented `assemble_dossier(...)` as deterministic orchestration over the read port: live lineage impact, catalog owner fan-out, optional failing run, current spec head, impact drift, and explicit evidence gaps.
+  - Added pure `diagnose(...)` reasoning over an assembled dossier: deterministic hypotheses, evidence citations, ranked statuses, and runbook lines. Current quality-gate confirmation keys off the `quality:` step-name prefix; a typed step-kind enum would make that predicate total.
   - Recorded unavailable read surfaces honestly in the dossier: schema diffs, correlated changes, and recent run listing remain gaps until the control plane exposes read endpoints for them.
   - Moved `ReadOnlyControlPlane` from the MCP entrypoint into `adapters.control_plane` so MCP and the agent reader share one GET-only client without inverting layers.
   - Added `HttpPlatformReader` over the read-only control plane, mapping API JSON into application-owned read models and returning `None` for 404 optional reads.

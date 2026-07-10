@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from keel.adapters.agent.graph import build_incident_agent
 from keel.adapters.agent.http_reader import HttpPlatformReader
 from keel.adapters.control_plane.read_only_client import ReadOnlyControlPlane
+from keel.application.agent.diagnose import HypothesisStatus
 from keel.application.agent.dossier import DatasetOwner, RunView
 from keel.application.catalog.entry import CatalogEntry
 from keel.application.incident.model import Incident, IncidentStatus
@@ -253,7 +254,7 @@ def test_http_platform_reader_returns_none_for_not_found_optional_reads() -> Non
     _run(run())
 
 
-def test_langgraph_agent_populates_dossier() -> None:
+def test_langgraph_agent_produces_ranked_diagnosis() -> None:
     async def run() -> None:
         graph = build_incident_agent(FakePlatformReader())
 
@@ -265,6 +266,17 @@ def test_langgraph_agent_populates_dossier() -> None:
             "failed",
             ("quality:unique",),
         )
-        assert result["hypotheses"] == ()
+        assert result["diagnosis"].subject == "analytics.orders"
+        assert tuple(hypothesis.kind for hypothesis in result["diagnosis"].hypotheses) == (
+            "quality_gate_failure",
+            "lineage_drift",
+            "upstream_spec_change",
+        )
+        assert tuple(hypothesis.status for hypothesis in result["diagnosis"].hypotheses) == (
+            HypothesisStatus.CONFIRMED,
+            HypothesisStatus.CONFIRMED,
+            HypothesisStatus.UNVERIFIED,
+        )
+        assert tuple(hypothesis.rank for hypothesis in result["diagnosis"].hypotheses) == (1, 2, 3)
 
     _run(run())
