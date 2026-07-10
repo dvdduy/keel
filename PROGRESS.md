@@ -655,3 +655,37 @@
 
 ### Talking point banked
 "The agent is deterministic before it is intelligent: the gather step follows a fixed read-only runbook into a typed dossier, and only the next node is reserved for LLM reasoning. That means Day 34 can eval the valuable part without a model, while LangGraph still gives us the state topology Days 32 and 33 can grow."
+
+## Day 32 - Reasoning node stub
+- Date: 2026-07-10
+- Done:
+  - Backfilled the Day 32 status explicitly: the LangGraph spine already carries a reasoning/narration seam, but no LLM-backed reasoning implementation is wired yet.
+  - Kept deterministic diagnosis as the source of truth for hypotheses, statuses, evidence, and runbook scaffolding.
+  - Deferred model selection, prompt shape, eval harnesses, and live narrator adapters until the guardrail boundary exists.
+
+### Design decisions
+- Day 32 remains an honest stub rather than a fake LLM integration. The agent can gather and diagnose deterministically, and narration is still an injected port.
+- The stub preserves the architecture shape needed for later work without giving an untrusted component authority over verified facts.
+
+### Talking point banked
+"I did not make the reasoning node look smarter than it is. The deterministic diagnosis is already useful, and the LLM seam stays injectable until there is a guardrail layer and an eval loop around it."
+
+## Day 33 - Agent guardrail layer
+- Date: 2026-07-10
+- Done:
+  - Added `application.agent.guardrails` as a pure application leaf for PII redaction and narration enforcement.
+  - Redacted email-like tokens from hypothesis summaries, evidence, and runbook lines before the narrator sees a `Diagnosis`.
+  - Rewired `narrate_runbook(...)` to pass only the redacted diagnosis into the narrator and then fail closed through `enforce_narration(...)`.
+  - Preserved subject and hypotheses across narration by construction; narrated prose can only affect runbook lines.
+  - Enforced per-line grounding: a narrated line is accepted only when every evidence anchor for that ranked hypothesis survives in the line.
+  - Fell back per position when a narrator drops evidence and fell back to the deterministic runbook when runbook length changes.
+  - Added `application.agent.authorization` with effect-typed read/write actions, approvals, and a total `authorize(...)` guard.
+  - Covered grounded rewrites, evidence dropping, fact mutation attempts, length mismatch, redaction before narration, redaction in the final runbook, and read/write authorization tests.
+
+### Design decisions
+- Guardrails live at the untrusted boundary instead of around the whole agent. Gather and diagnosis remain deterministic; only narration is treated as untrusted prose.
+- Grounding is validated after narration rather than requested by prompt. If the narrator drops a machine-verified evidence anchor, the deterministic line wins.
+- No write tools are wired yet, so HITL authorization is seam-ready and vacuously satisfied today; future write actions inherit the effect-typed gate.
+
+### Talking point banked
+"The agent's only untrusted surface is the narrator, and I guard it by validation, not prompting: the LLM may reword a runbook line but if its output drops the machine-verified evidence anchor, I fall back to the deterministic line - per position, fail-closed. Facts are structurally immutable across that boundary, PII is redacted before the model sees it, and write-ness is an effect-typed property so HITL is a total function, not a hope."

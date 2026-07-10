@@ -56,10 +56,13 @@ def _diagnosis() -> Diagnosis:
             ),
         ),
         runbook=(
-            "Investigate the failed quality gate; evidence: run status failed.",
             (
-                "Could not verify an upstream spec change: no spec history/diff read endpoint "
-                "- compare recent spec versions manually."
+                "Investigate the failed quality gate; evidence: "
+                "run bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb status failed."
+            ),
+            (
+                "Could not verify an upstream spec change: correlated changes unavailable: "
+                "no spec history/diff read endpoint - compare recent spec versions manually."
             ),
         ),
     )
