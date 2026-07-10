@@ -97,6 +97,15 @@ class FakePlatformReader:
         return UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
 
 
+class FakeRunbookNarrator:
+    async def narrate(self, diagnosis):
+        return type(diagnosis)(
+            subject=diagnosis.subject,
+            hypotheses=diagnosis.hypotheses,
+            runbook=tuple(f"Narrated: {line}" for line in diagnosis.runbook),
+        )
+
+
 def _run(coro: Awaitable[T]) -> T:
     return asyncio.run(coro)
 
@@ -278,5 +287,17 @@ def test_langgraph_agent_produces_ranked_diagnosis() -> None:
             HypothesisStatus.UNVERIFIED,
         )
         assert tuple(hypothesis.rank for hypothesis in result["diagnosis"].hypotheses) == (1, 2, 3)
+
+    _run(run())
+
+
+def test_langgraph_agent_can_narrate_verified_runbook() -> None:
+    async def run() -> None:
+        graph = build_incident_agent(FakePlatformReader(), FakeRunbookNarrator())
+
+        result = await graph.ainvoke({"incident": _incident()})
+
+        assert result["diagnosis"].hypotheses[0].status == HypothesisStatus.CONFIRMED
+        assert all(line.startswith("Narrated: ") for line in result["diagnosis"].runbook)
 
     _run(run())
