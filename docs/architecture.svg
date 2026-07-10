@@ -1,0 +1,38 @@
+<svg width="100%" viewBox="0 0 680 650" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="keel-arch-title keel-arch-desc">
+<title id="keel-arch-title">Keel hexagonal architecture</title>
+<desc id="keel-arch-desc">Four nested layers: entrypoints (API, CLI, MCP server) is outermost, containing adapters (DB, DuckDB, dbt, agent graph), containing application (use cases, specs, quality, SLO, RCA), containing domain (run state, core rules) at the center. Dependencies point inward, enforced by import-linter.</desc>
+<style>
+  text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .l1 { fill:#F1EFE8; stroke:#5F5E5A; } .l1t { fill:#444441; } .l1s { fill:#5F5E5A; }
+  .l2 { fill:#FAECE7; stroke:#993C1D; } .l2t { fill:#712B13; } .l2s { fill:#993C1D; }
+  .l3 { fill:#E1F5EE; stroke:#0F6E56; } .l3t { fill:#085041; } .l3s { fill:#0F6E56; }
+  .l4 { fill:#EEEDFE; stroke:#534AB7; } .l4t { fill:#3C3489; } .l4s { fill:#534AB7; }
+  .legend { fill:#5F5E5A; }
+  @media (prefers-color-scheme: dark) {
+    .l1 { fill:#444441; stroke:#B4B2A9; } .l1t{ fill:#D3D1C7; } .l1s{ fill:#B4B2A9; }
+    .l2 { fill:#712B13; stroke:#F0997B; } .l2t{ fill:#F5C4B3; } .l2s{ fill:#F0997B; }
+    .l3 { fill:#085041; stroke:#5DCAA5; } .l3t{ fill:#9FE1CB; } .l3s{ fill:#5DCAA5; }
+    .l4 { fill:#3C3489; stroke:#AFA9EC; } .l4t{ fill:#CECBF6; } .l4s{ fill:#AFA9EC; }
+    .legend { fill:#B4B2A9; }
+  }
+</style>
+
+<rect class="l1" x="40" y="40" width="600" height="480" rx="16" stroke-width="1"/>
+<text class="l1t" x="56" y="62" font-size="14" font-weight="500" dominant-baseline="central">Entrypoints</text>
+<text class="l1s" x="56" y="84" font-size="12" dominant-baseline="central">API, CLI, MCP server</text>
+
+<rect class="l2" x="95" y="110" width="490" height="370" rx="14" stroke-width="1"/>
+<text class="l2t" x="111" y="132" font-size="14" font-weight="500" dominant-baseline="central">Adapters</text>
+<text class="l2s" x="111" y="154" font-size="12" dominant-baseline="central">DB, DuckDB, dbt, agent graph</text>
+
+<rect class="l3" x="150" y="180" width="380" height="260" rx="12" stroke-width="1"/>
+<text class="l3t" x="166" y="202" font-size="14" font-weight="500" dominant-baseline="central">Application</text>
+<text class="l3s" x="166" y="224" font-size="12" dominant-baseline="central">Use cases, specs, quality, SLO, RCA</text>
+
+<rect class="l4" x="205" y="250" width="270" height="150" rx="10" stroke-width="1"/>
+<text class="l4t" x="221" y="272" font-size="14" font-weight="500" dominant-baseline="central">Domain</text>
+<text class="l4s" x="221" y="294" font-size="12" dominant-baseline="central">Run state, core rules</text>
+
+<text class="legend" x="340" y="595" font-size="12" text-anchor="middle">Entrypoints &#8594; Adapters &#8594; Application &#8594; Domain</text>
+<text class="legend" x="340" y="614" font-size="12" text-anchor="middle">dependencies point inward, enforced by import-linter</text>
+</svg>

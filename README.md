@@ -10,6 +10,19 @@ At scale, bespoke pipelines produce inconsistent contracts, silent staleness, we
 
 The flagship scenario is failure-shaped: an upstream schema change tries to break downstream consumers. Keel rejects it by default. If someone forces it through with an audited override, the platform contains the damage with quarantine, one grouped incident, and a deterministic RCA dossier.
 
+## Highlights
+
+A few of the design decisions this project is built to defend in an interview:
+
+- **Contract compatibility engine (Day 7).** Instead of a hand-maintained table of breaking-change rules, the compatibility check reduces to one invariant — a new contract must accept every dataset the old one accepted — plus a rule that columns can't be silently dropped. Breaking changes are rejected by default with a structured diff; overriding them is explicit and audited.
+- **Quarantine over propagation (Day 18).** A quality check is a monitor that's allowed to say no. It always records an audit row, then blocks or proceeds. Blocking reuses the same saga-style rollback used for run failures — bad data is compensated away before it reaches anything downstream — and a check that couldn't even run still blocks, rather than waving data through.
+- **Incident grouping by root cause (Day 26).** Dedup is a graph problem before it's a notification problem: find the connected component of breaching subjects, then use lineage direction to pick the root incidents actually worth paging on. One upstream failure produces one page, not one per downstream table.
+- **Agent guardrails at the narrator boundary (Day 33).** The agent's only untrusted surface is the LLM-written narration. It may reword a runbook line, but if it drops the machine-verified evidence anchor, the system falls back to the deterministic line. Facts stay structurally immutable across that boundary.
+- **Eval-gated RCA, not a vibes check (Day 34).** A labeled dossier goes into `diagnose`, a ranked hypothesis list comes out, and CI fails the build if top-line accuracy drops or confident-wrong causes rise. LLM-as-judge is deliberately deferred until a model actually owns part of the reasoning.
+- **Observability as a thin port (Day 35).** The application owns a tiny lifecycle port; the adapter translates that into traces, logs, and SLIs. Telemetry never recomputes domain facts — it projects them from the run aggregate after the state machine has already moved.
+
+Full day-by-day build log, including every banked talking point: [PROGRESS.md](./PROGRESS.md).
+
 ## Quickstart
 
 ```bash
@@ -37,18 +50,40 @@ The demo walks the core governance story:
 
 The same stages are imported by [tests/test_demo_breaking_change.py](./tests/test_demo_breaking_change.py), so the demo is characterization-tested in CI.
 
-## Architecture
-
-Dependencies point inward and import-linter enforces the boundary:
+Real output from a run:
 
 ```text
-entrypoints  ->  adapters  ->  application  ->  domain
- API/CLI/MCP     DB/DuckDB     use cases        run state
-                dbt/agent      specs/lineage
-                              quality/SLO/RCA
+1. Submit a spec graph
+   raw.orders feeds main.orders_stg, main.revenue_daily, main.customer_ltv, main.fulfillment_health, main.executive_revenue (5 downstream datasets)
+
+2. Submit a breaking upstream contract change
+   rejected: column_dropped on amount - column was removed from the contract
+   nothing shipped: True
+
+3. Resubmit with --allow-breaking
+   audited override: True
+   version: e0917d1b-c927-417d-b49c-94f9e98548b0
+
+4. Run downstream and contain the blast radius
+   quality gate: unknown (not_null check on amount is unknown because no column measurement was available)
+   quarantined: run ended failed
+   SLO: breaching
+   incidents grouped: 1
+   assert len(incidents) == 1 group
+
+5. Diagnose the incident
+   RCA subject: raw.orders
+   top hypothesis: quality_gate_failure (confirmed)
+   evidence: run 45403576-1e9b-4785-9744-0981add4e2a8 status failed; failed quality step quality:amount
 ```
 
-Ports isolate the volatile seams: control-plane storage, warehouse execution, transform runner, MCP reader, telemetry, and the agent graph. DuckDB and dbt-duckdb are local adapters, not architectural commitments.
+## Architecture
+
+![Keel architecture: entrypoints, adapters, application, and domain layers, nested with dependencies pointing inward](./docs/architecture.svg)
+
+Dependencies point inward and import-linter enforces the boundary. Ports isolate the volatile seams: control-plane storage, warehouse execution, transform runner, MCP reader, telemetry, and the agent graph. DuckDB and dbt-duckdb are local adapters, not architectural commitments.
+
+**Where to start reading:** [`application/specs/compatibility.py`](./src/keel/application/specs/compatibility.py) for the compatibility engine, [`application/agent/diagnose.py`](./src/keel/application/agent/diagnose.py) for the RCA logic, [`application/incident/group.py`](./src/keel/application/incident/group.py) for grouping.
 
 ## Tech Stack
 
