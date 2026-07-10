@@ -1,4 +1,4 @@
-.PHONY: install format lint type test check
+.PHONY: install format lint type test eval check
 
 install:
 	pip install -e ".[dev]"
@@ -12,10 +12,13 @@ lint:
 	black --check .
 
 type:
-	mypy src
+	mypy src evals
 
 test:
 	pytest
+
+eval:
+	python -m evals.rca.run
 
 check: lint type test
 	lint-imports

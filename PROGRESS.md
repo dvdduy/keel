@@ -689,3 +689,21 @@
 
 ### Talking point banked
 "The agent's only untrusted surface is the narrator, and I guard it by validation, not prompting: the LLM may reword a runbook line but if its output drops the machine-verified evidence anchor, I fall back to the deterministic line - per position, fail-closed. Facts are structurally immutable across that boundary, PII is redacted before the model sees it, and write-ness is an effect-typed property so HITL is a total function, not a hope."
+
+## Day 34 - Deterministic RCA eval gate
+- Date: 2026-07-10
+- Done:
+  - Added a top-level `evals/rca` harness outside the import-linter application package.
+  - Defined frozen eval contracts for labeled RCA cases, per-case scoring, and aggregate reports.
+  - Built a labeled incident set directly from `IncidentDossier` value objects, covering confirmed quality failures, lineage drift, honest abstention, drift with refuted quality runs, and a confirmed decoy case.
+  - Added a pure runner with CI thresholds: top-1 accuracy must stay at or above 0.80 and false-positive rate at or below 0.10.
+  - Added scorer unit tests against hand-crafted `Diagnosis` objects so scorer correctness does not depend on the engine it grades.
+  - Added `make eval` and expanded mypy coverage to include `evals`.
+
+### Design decisions
+- The eval grades `diagnose(dossier)` directly because gather/read plumbing is already covered separately.
+- Honest abstention is rewarded: when no cause can be confirmed, the correct behavior is no `CONFIRMED` hypothesis, not forcing an RCA.
+- LLM-as-judge remains deferred on purpose. There is no model in the reasoning loop yet; when model-backed reasoning or narration lands, prose quality judging can sit beside this deterministic RCA-kind scorer without replacing it.
+
+### Talking point banked
+"Because RCA is deterministic today, the eval is a characterization gate instead of a vibes check: a labeled dossier goes into `diagnose`, a ranked hypothesis list comes out, and CI fails if top-line accuracy drops or confident-wrong causes rise. LLM judging is deliberately deferred until a model owns part of the reasoning or prose quality surface."
